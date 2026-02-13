@@ -97,6 +97,7 @@ export default function LoginPage() {
           />
         </div>
         <h1 className="auth-title">관리자 로그인</h1>
+        <p className="auth-subtitle">카카오 로그인 1회로 회원가입과 로그인이 자동 처리됩니다.</p>
 
         {err ? <div className="alert-error">{err}</div> : null}
 

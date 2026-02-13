@@ -20,7 +20,7 @@ export default function OnboardingPage() {
         method: "POST",
         body: JSON.stringify({ name }),
       });
-      router.replace("/app/dashboard");
+      router.replace("/dashboard");
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "도장 생성 중 오류가 발생했습니다.");
     } finally {
