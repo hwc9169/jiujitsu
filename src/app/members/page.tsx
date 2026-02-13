@@ -12,14 +12,6 @@ type MembersResponse = {
   pageSize: number;
 };
 
-type ImportMembersResponse = {
-  total: number;
-  created: number;
-  updated: number;
-  failed: number;
-  errors: Array<{ row: number; reason: string }>;
-};
-
 type FilterStatus = MemberStatus | "ALL";
 
 const TABS: { key: FilterStatus; label: string }[] = [
@@ -127,10 +119,6 @@ export default function MembersPage() {
   // modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<ImportMembersResponse | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(count / pageSize)), [count]);
 
@@ -182,39 +170,12 @@ export default function MembersPage() {
     await load();
   };
 
-  const onImportCsv = async () => {
-    if (!csvFile) {
-      setImportError("CSV 파일을 먼저 선택해 주세요.");
-      return;
-    }
-
-    setImportError(null);
-    setImportResult(null);
-    setImporting(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", csvFile);
-      const result = await apiFetch<ImportMembersResponse>("/api/import/members", {
-        method: "POST",
-        body: formData,
-      });
-      setImportResult(result);
-      setCsvFile(null);
-      await load(1);
-      setPage(1);
-    } catch (e: unknown) {
-      setImportError(e instanceof Error ? e.message : "CSV 업로드 중 오류가 발생했습니다.");
-    } finally {
-      setImporting(false);
-    }
-  };
-
   return (
     <AdminShell
       title="회원 관리"
       subtitle="만료일 기준 상태를 관리하고, 미납/만료예정 회원을 즉시 확인하세요."
       actions={
-        <button type="button" className="btn btn-primary" onClick={openCreate}>
+        <button type="button" className="btn btn-accent" onClick={openCreate}>
           + 회원 추가
         </button>
       }
@@ -252,48 +213,6 @@ export default function MembersPage() {
             </button>
           </div>
         </div>
-
-        <div className="csv-upload-row">
-          <div className="csv-upload-left">
-            <input
-              className="input csv-file-input"
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => {
-                const selectedFile = e.target.files?.[0] ?? null;
-                setCsvFile(selectedFile);
-                setImportError(null);
-              }}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onImportCsv}
-              disabled={importing}
-            >
-              {importing ? "업로드 중..." : "CSV 업로드"}
-            </button>
-          </div>
-          <div className="csv-upload-help">
-            헤더 예시: name,phone,gender,start_date,expire_date,memo (또는 한글 헤더)
-          </div>
-        </div>
-
-        {importError ? <div className="alert-error csv-upload-alert">{importError}</div> : null}
-        {importResult ? (
-          <div className="csv-upload-result">
-            총 {importResult.total}건, 생성 {importResult.created}건, 수정 {importResult.updated}건, 실패 {importResult.failed}건
-            {importResult.errors.length > 0 ? (
-              <ul className="csv-upload-errors">
-                {importResult.errors.slice(0, 5).map((error) => (
-                  <li key={`${error.row}-${error.reason}`}>
-                    {error.row}행: {error.reason}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
 
         <div className="panel-subhead">
           <div>{loading ? "회원 목록 불러오는 중..." : `총 ${count}명`}</div>

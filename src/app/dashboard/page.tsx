@@ -264,9 +264,6 @@ export default function DashboardPage() {
             회원 목록 확인
           </Link>
           <button type="button" className="btn btn-text" disabled>
-            CSV 업로드 (준비중)
-          </button>
-          <button type="button" className="btn btn-text" disabled>
             문자 발송 로그 (준비중)
           </button>
         </div>

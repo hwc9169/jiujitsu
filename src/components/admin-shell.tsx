@@ -23,7 +23,7 @@ const MAIN_NAV = [
   { href: "/members", label: "회원 관리" },
 ];
 
-const SOON_NAV = ["CSV 업로드 (준비중)", "문자 로그 (준비중)"];
+const SOON_NAV = ["문자 로그 (준비중)"];
 
 export function AdminShell({ title, subtitle, actions, children }: AdminShellProps) {
   const router = useRouter();
