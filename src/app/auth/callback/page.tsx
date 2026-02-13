@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 function toFriendlyAuthError(message: string) {
@@ -17,7 +17,6 @@ function toFriendlyAuthError(message: string) {
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,14 +24,15 @@ export default function AuthCallbackPage() {
 
     const run = async () => {
       try {
-        const authError = searchParams.get("error");
-        const authErrorDescription = searchParams.get("error_description");
+        const params = new URLSearchParams(window.location.search);
+        const authError = params.get("error");
+        const authErrorDescription = params.get("error_description");
         if (authError) {
           throw new Error(authErrorDescription ?? authError);
         }
 
         const sb = supabaseBrowser();
-        const code = searchParams.get("code");
+        const code = params.get("code");
 
         if (code) {
           const { error: exchangeError } = await sb.auth.exchangeCodeForSession(code);
@@ -58,7 +58,7 @@ export default function AuthCallbackPage() {
     return () => {
       mounted = false;
     };
-  }, [router, searchParams]);
+  }, [router]);
 
   return (
     <div className="auth-shell">
