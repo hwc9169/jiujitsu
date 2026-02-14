@@ -15,10 +15,20 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "주짓때로",
   description: "주짓때로 관리자 콘솔",
+  manifest: "/manifest.json",
   icons: {
-    icon: "/jiujittaero-icon.png",
-    shortcut: "/jiujittaero-icon.png",
-    apple: "/jiujittaero-icon.png",
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon.ico"},
+    ],
+    shortcut: [{ url: "/favicon.ico" }],
+    apple: [
+      { url: "/apple-icon-180x180.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-icon.png", type: "image/png" },
+    ],
   },
 };
 

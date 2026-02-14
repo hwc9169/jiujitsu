@@ -4,9 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
+type KakaoExchangeResponse = {
+  idToken: string;
+  accessToken: string;
+};
+
 function toFriendlyAuthError(message: string) {
   const normalized = message.toLowerCase();
-  if (normalized.includes("provider is not enabled")) {
+  if (
+    normalized.includes("provider is not enabled") ||
+    (normalized.includes("provider") && normalized.includes("is not enabled"))
+  ) {
     return "카카오 로그인이 비활성화되어 있습니다. Supabase Auth 설정에서 Kakao Provider를 활성화해 주세요.";
   }
   if (normalized.includes("redirect")) {
@@ -31,16 +39,29 @@ export default function AuthCallbackPage() {
           throw new Error(authErrorDescription ?? authError);
         }
 
-        const sb = supabaseBrowser();
         const code = params.get("code");
-
-        if (code) {
-          const { error: exchangeError } = await sb.auth.exchangeCodeForSession(code);
-          if (exchangeError) throw exchangeError;
-        } else {
-          // implicit flow fallback
-          await sb.auth.getSession();
+        if (!code) {
+          throw new Error("카카오 인가 코드를 찾을 수 없습니다.");
         }
+
+        const redirectUri = `${window.location.origin}/auth/callback`;
+        const exchangeRes = await fetch("/api/auth/kakao/exchange", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, redirectUri }),
+        });
+        const exchangeJson = (await exchangeRes.json().catch(() => ({}))) as Partial<KakaoExchangeResponse> & { error?: string };
+        if (!exchangeRes.ok || !exchangeJson.idToken || !exchangeJson.accessToken) {
+          throw new Error(exchangeJson.error ?? "카카오 토큰 교환에 실패했습니다.");
+        }
+
+        const sb = supabaseBrowser();
+        const { error: signInError } = await sb.auth.signInWithIdToken({
+          provider: "kakao",
+          token: exchangeJson.idToken,
+          access_token: exchangeJson.accessToken,
+        });
+        if (signInError) throw signInError;
 
         if (!mounted) return;
         router.replace("/app");

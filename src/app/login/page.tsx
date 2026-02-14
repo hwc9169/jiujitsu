@@ -5,21 +5,81 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
+const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
+const KAKAO_SDK_URL = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.9/kakao.min.js";
+
+type KakaoAuthorizeOptions = {
+  redirectUri: string;
+  prompt?: string;
+  scope?: string;
+};
+
+type KakaoSdk = {
+  init: (key: string) => void;
+  isInitialized: () => boolean;
+  Auth: {
+    authorize: (options: KakaoAuthorizeOptions) => void;
+  };
+};
+
+declare global {
+  interface Window {
+    Kakao?: KakaoSdk;
+  }
+}
+
 function toFriendlyAuthError(message: string) {
   const normalized = message.toLowerCase();
-  if (normalized.includes("provider is not enabled")) {
+  if (
+    normalized.includes("provider is not enabled") ||
+    (normalized.includes("provider") && normalized.includes("is not enabled"))
+  ) {
     return "카카오 로그인이 비활성화되어 있습니다. Supabase Auth 설정에서 Kakao Provider를 활성화해 주세요.";
   }
   if (normalized.includes("redirect")) {
     return "인증 리다이렉트 설정을 확인해 주세요.";
   }
+  if (normalized.includes("kakao sdk")) {
+    return "카카오 SDK 초기화에 실패했습니다. JavaScript SDK 도메인과 JavaScript 키를 확인해 주세요.";
+  }
   return message;
+}
+
+function loadKakaoSdk(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") {
+      reject(new Error("Kakao SDK can only be loaded in browser"));
+      return;
+    }
+
+    if (window.Kakao) {
+      resolve();
+      return;
+    }
+
+    const existingScript = document.querySelector<HTMLScriptElement>("script[data-kakao-sdk='true']");
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Failed to load Kakao SDK")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = KAKAO_SDK_URL;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.dataset.kakaoSdk = "true";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Kakao SDK"));
+    document.head.appendChild(script);
+  });
 }
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [checkingSession, setCheckingSession] = useState(true);
+  const [kakaoReady, setKakaoReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -59,24 +119,54 @@ export default function LoginPage() {
     };
   }, [router]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const setup = async () => {
+      try {
+        if (!KAKAO_JS_KEY) throw new Error("Missing NEXT_PUBLIC_KAKAO_JS_KEY");
+        await loadKakaoSdk();
+        if (!window.Kakao) throw new Error("Kakao SDK is unavailable");
+
+        if (!window.Kakao.isInitialized()) {
+          window.Kakao.init(KAKAO_JS_KEY);
+        }
+        if (!window.Kakao.isInitialized()) {
+          throw new Error("Kakao SDK initialization failed");
+        }
+
+        if (!mounted) return;
+        setKakaoReady(true);
+      } catch (e: unknown) {
+        if (!mounted) return;
+        setErr(e instanceof Error ? toFriendlyAuthError(e.message) : "카카오 SDK 초기화에 실패했습니다.");
+      }
+    };
+
+    setup().catch(() => {
+      if (!mounted) return;
+      setErr("카카오 SDK 초기화에 실패했습니다.");
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const signInWithKakao = async () => {
     setErr(null);
     setLoading(true);
     try {
-      const sb = supabaseBrowser();
-      const redirectTo = `${window.location.origin}/auth/callback`;
-      const { error } = await sb.auth.signInWithOAuth({
-        provider: "kakao",
-        options: {
-          redirectTo,
-          queryParams: { prompt: "select_account" },
-        },
-      });
-
-      if (error) {
-        setErr(toFriendlyAuthError(error.message));
-        setLoading(false);
+      if (!window.Kakao || !kakaoReady) {
+        throw new Error("Kakao SDK is unavailable");
       }
+
+      const redirectTo = `${window.location.origin}/auth/callback`;
+      window.Kakao.Auth.authorize({
+        redirectUri: redirectTo,
+        prompt: "select_account",
+        scope: "openid",
+      });
     } catch (e: unknown) {
       setErr(e instanceof Error ? toFriendlyAuthError(e.message) : "카카오 로그인 중 오류가 발생했습니다.");
       setLoading(false);
@@ -106,9 +196,15 @@ export default function LoginPage() {
             type="button"
             className="btn btn-kakao auth-action"
             onClick={signInWithKakao}
-            disabled={loading || checkingSession}
+            disabled={loading || checkingSession || !kakaoReady}
           >
-            {checkingSession ? "로그인 상태 확인 중..." : loading ? "카카오로 이동 중..." : "카카오로 시작하기"}
+            {checkingSession
+              ? "로그인 상태 확인 중..."
+              : !kakaoReady
+                ? "카카오 SDK 준비 중..."
+                : loading
+                  ? "카카오로 이동 중..."
+                  : "카카오로 시작하기"}
           </button>
         </div>
       </div>

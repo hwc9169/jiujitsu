@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { apiFetch } from "@/lib/api_client";
-import type { Member, MemberGender, MemberStatus } from "@/lib/types";
+import type { Member, MemberBelt, MemberBeltGral, MemberGender, MemberStatus, MembershipState } from "@/lib/types";
 
 type MembersResponse = {
   items: Member[];
@@ -21,13 +21,26 @@ const TABS: { key: FilterStatus; label: string }[] = [
   { key: "OVERDUE", label: "미납" },
 ];
 
-const STATUS_META: Record<MemberStatus, { label: string; className: string }> = {
-  NORMAL: { label: "정상", className: "chip chip-normal" },
-  EXPIRING: { label: "7일 이내", className: "chip chip-expiring" },
-  OVERDUE: { label: "미납", className: "chip chip-overdue" },
-};
-
 const GENDER_OPTIONS: MemberGender[] = ["남", "여"];
+const BELT_OPTIONS: MemberBelt[] = ["흰띠", "그레이띠", "오렌지띠", "초록띠", "파란띠", "보라띠", "갈색띠", "검은띠"];
+const BELT_TONE_CLASS: Record<MemberBelt, string> = {
+  흰띠: "belt-tone-white",
+  그레이띠: "belt-tone-gray",
+  오렌지띠: "belt-tone-orange",
+  초록띠: "belt-tone-green",
+  파란띠: "belt-tone-blue",
+  보라띠: "belt-tone-purple",
+  갈색띠: "belt-tone-brown",
+  검은띠: "belt-tone-black",
+};
+const BELT_GRAL_OPTIONS: MemberBeltGral[] = [0, 1, 2, 3, 4];
+const BELT_GRAL_LABEL: Record<MemberBeltGral, string> = {
+  0: "무그랄",
+  1: "1그랄",
+  2: "2그랄",
+  3: "3그랄",
+  4: "4그랄",
+};
 
 const REGISTRATION_PLANS = [
   { value: "1", label: "1개월" },
@@ -105,6 +118,61 @@ function formatPhoneDisplay(phone: string) {
   return phone;
 }
 
+function calculateAge(birthDate?: string | null): number | null {
+  if (!birthDate) return null;
+  const [year, month, day] = birthDate.split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  const thisYearBirthday = new Date(today.getFullYear(), month - 1, day);
+  if (today < thisYearBirthday) age -= 1;
+  return age >= 0 ? age : null;
+}
+
+function resolveMembershipState(member: Member): MembershipState {
+  return member.membership_state === "PAUSED" ? "PAUSED" : "ACTIVE";
+}
+
+function resolveBeltGral(member: Member): MemberBeltGral {
+  const gral = member.belt_gral;
+  if (gral === 0 || gral === 1 || gral === 2 || gral === 3 || gral === 4) return gral;
+  return 0;
+}
+
+function MaterialEditIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 17.25V21h3.75l11.06-11.06-3.75-3.75L3 17.25Z" />
+      <path d="M20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z" />
+    </svg>
+  );
+}
+
+function MaterialPauseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 19h4V5H6v14Zm8-14v14h4V5h-4Z" />
+    </svg>
+  );
+}
+
+function MaterialPlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function MaterialDeleteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12Zm2.46-4.88 1.41 1.41L12 13.41l2.12 2.12 1.41-1.41L13.41 12l2.12-2.12-1.41-1.41L12 10.59 9.88 8.47 8.47 9.88 10.59 12l-2.13 2.12ZM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5Z" />
+    </svg>
+  );
+}
+
 export default function MembersPage() {
   const [tab, setTab] = useState<FilterStatus>("ALL");
   const [qInput, setQInput] = useState("");
@@ -161,6 +229,21 @@ export default function MembersPage() {
   const onDelete = async (m: Member) => {
     if (!confirm(`${m.name} 삭제(복구 가능)할까?`)) return;
     await apiFetch(`/api/members/${m.id}`, { method: "DELETE" });
+    await load();
+  };
+
+  const onTogglePause = async (m: Member) => {
+    const membershipState = resolveMembershipState(m);
+    const action = membershipState === "PAUSED" ? "RESUME" : "PAUSE";
+    const message = action === "PAUSE"
+      ? `${m.name} 회원 등록을 정지할까요?`
+      : `${m.name} 회원 등록을 재개할까요?`;
+    if (!confirm(message)) return;
+
+    await apiFetch(`/api/members/${m.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action }),
+    });
     await load();
   };
 
@@ -230,8 +313,10 @@ export default function MembersPage() {
                 <tr>
                   <th>이름</th>
                   <th>성별</th>
+                  <th>띠</th>
+                  <th>나이</th>
                   <th>전화번호</th>
-                  <th>상태</th>
+                  <th>등록상태</th>
                   <th>만료일</th>
                   <th>메모</th>
                   <th>관리</th>
@@ -240,16 +325,47 @@ export default function MembersPage() {
               <tbody>
                 {items.map((m) => {
                   const status = resolveStatus(m);
-                  const statusMeta = STATUS_META[status];
+                  const membershipState = resolveMembershipState(m);
+                  const beltGral = resolveBeltGral(m);
+                  const beltToneClass = m.belt ? BELT_TONE_CLASS[m.belt] : "";
+                  const age = calculateAge(m.birth_date);
                   const diff = dayDiffFromToday(m.expire_date);
                   const expireTone = diff < 0 ? "expire-overdue" : diff <= 7 ? "expire-warning" : "expire-normal";
+                  let registrationClass = "chip chip-normal";
+                  let registrationLabel = "활성";
+                  if (status === "OVERDUE") {
+                    registrationClass = "chip chip-overdue";
+                    registrationLabel = "미납";
+                  } else if (membershipState === "PAUSED") {
+                    registrationClass = "chip chip-paused";
+                    registrationLabel = "정지";
+                  }
                   return (
                     <tr key={m.id}>
                       <td className="member-name">{m.name}</td>
                       <td>{m.gender ?? "-"}</td>
+                      <td>
+                        {m.belt ? (
+                          <div className="member-belt-cell" title={`${m.belt} ${BELT_GRAL_LABEL[beltGral]}`}>
+                            <span className={`belt-icon belt-icon-table ${beltToneClass}`} aria-hidden="true">
+                              <span className="belt-icon-band" />
+                              <span className="belt-icon-knot" />
+                            </span>
+                            <span className="gral-icon-group member-belt-gral" aria-hidden="true">
+                              {[0, 1, 2, 3].map((index) => (
+                                <span
+                                  key={index}
+                                  className={`gral-icon ${index < beltGral ? "active" : ""}`}
+                                />
+                              ))}
+                            </span>
+                          </div>
+                        ) : "-"}
+                      </td>
+                      <td>{age == null ? "-" : `${age}세`}</td>
                       <td className="member-phone">{formatPhoneDisplay(m.phone)}</td>
                       <td>
-                        <span className={statusMeta.className}>{statusMeta.label}</span>
+                        <span className={registrationClass}>{registrationLabel}</span>
                       </td>
                       <td className={expireTone}>
                         {m.expire_date}
@@ -258,11 +374,35 @@ export default function MembersPage() {
                       <td>{m.memo?.trim() || "-"}</td>
                       <td>
                         <div className="table-actions">
-                          <button type="button" className="btn btn-text" onClick={() => openEdit(m)}>
-                            수정
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            data-tooltip="회원 정보 수정"
+                            aria-label="회원 정보 수정"
+                            title="회원 정보 수정"
+                            onClick={() => openEdit(m)}
+                          >
+                            <MaterialEditIcon />
                           </button>
-                          <button type="button" className="btn btn-danger" onClick={() => onDelete(m)}>
-                            삭제
+                          <button
+                            type="button"
+                            className={`icon-btn ${membershipState === "PAUSED" ? "icon-btn-resume" : "icon-btn-pause"}`}
+                            data-tooltip={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
+                            aria-label={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
+                            title={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
+                            onClick={() => onTogglePause(m)}
+                          >
+                            {membershipState === "PAUSED" ? <MaterialPlayIcon /> : <MaterialPauseIcon />}
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn-danger"
+                            data-tooltip="회원 삭제"
+                            aria-label="회원 삭제"
+                            title="회원 삭제"
+                            onClick={() => onDelete(m)}
+                          >
+                            <MaterialDeleteIcon />
                           </button>
                         </div>
                       </td>
@@ -329,7 +469,10 @@ function MemberModal({
 
   const [name, setName] = useState(member?.name ?? "");
   const [gender, setGender] = useState<MemberGender | "">(member?.gender ?? (isEdit ? "" : "남"));
+  const [belt, setBelt] = useState<MemberBelt | "">(member?.belt ?? (isEdit ? "" : "흰띠"));
+  const [beltGral, setBeltGral] = useState<MemberBeltGral>(member?.belt_gral ?? 0);
   const [phone, setPhone] = useState(member?.phone ?? "");
+  const [birthDate, setBirthDate] = useState(formatDateInput(member?.birth_date));
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [expireDate, setExpireDate] = useState(defaultExpireDate);
   const [memo, setMemo] = useState(member?.memo ?? "");
@@ -350,8 +493,8 @@ function MemberModal({
     try {
       const normalizedPhone = phone.replace(/\D/g, "");
 
-      if (!name.trim() || !gender || !normalizedPhone || !expireDate) {
-        setErr("이름/성별/전화/만료일은 필수");
+      if (!name.trim() || !gender || !belt || !normalizedPhone || !expireDate) {
+        setErr("이름/성별/띠/전화/만료일은 필수");
         return;
       }
       if (normalizedPhone.length < 9) {
@@ -362,7 +505,10 @@ function MemberModal({
       const payload = {
         name: name.trim(),
         gender,
+        belt,
+        belt_gral: beltGral,
         phone: normalizedPhone,
+        birth_date: birthDate || null,
         start_date: startDate ? startDate : null,
         expire_date: expireDate,
         memo: memo.trim() ? memo.trim() : null,
@@ -424,6 +570,63 @@ function MemberModal({
                   </button>
                 ))}
               </div>
+            </label>
+
+            <label className="field-label">
+              띠*
+              <div className="belt-options">
+                {BELT_OPTIONS.map((option) => {
+                  const toneClass = BELT_TONE_CLASS[option];
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`belt-option ${belt === option ? "active" : ""}`}
+                      onClick={() => setBelt(option)}
+                    >
+                      <span className={`belt-icon ${toneClass}`} aria-hidden="true">
+                        <span className="belt-icon-band" />
+                        <span className="belt-icon-knot" />
+                      </span>
+                      <span className="belt-option-label">{option}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </label>
+
+            <label className="field-label">
+              그랄*
+              <div className="gral-options">
+                {BELT_GRAL_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`gral-option ${beltGral === option ? "active" : ""}`}
+                    onClick={() => setBeltGral(option)}
+                  >
+                    <span className="gral-icon-group" aria-hidden="true">
+                      {[0, 1, 2, 3].map((index) => (
+                        <span
+                          key={index}
+                          className={`gral-icon ${index < option ? "active" : ""}`}
+                        />
+                      ))}
+                    </span>
+                    <span className="gral-label">{BELT_GRAL_LABEL[option]}</span>
+                  </button>
+                ))}
+              </div>
+            </label>
+
+            <label className="field-label">
+              생년월일
+              <input
+                className="input"
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+              />
             </label>
 
             <label className="field-label">

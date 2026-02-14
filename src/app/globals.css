@@ -628,6 +628,26 @@ textarea {
   font-size: 13px;
 }
 
+.member-belt-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.belt-icon-table {
+  width: 34px;
+  height: 18px;
+}
+
+.member-belt-gral {
+  gap: 2px;
+}
+
+.member-belt-gral .gral-icon {
+  width: 4px;
+  height: 10px;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -656,6 +676,12 @@ textarea {
   color: var(--danger);
 }
 
+.chip-paused {
+  border-color: color-mix(in srgb, var(--muted) 35%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft) 65%, var(--line));
+  color: color-mix(in srgb, var(--foreground) 75%, var(--muted));
+}
+
 .expire-overdue {
   color: var(--danger);
   font-weight: 700;
@@ -679,7 +705,104 @@ textarea {
 
 .table-actions {
   display: flex;
-  gap: 6px;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  --icon-btn-bg: var(--surface-soft);
+  --icon-btn-border: var(--line);
+  --icon-btn-color: var(--primary);
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--icon-btn-border);
+  border-radius: 10px;
+  background: var(--icon-btn-bg);
+  color: var(--icon-btn-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.icon-btn:hover {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--line));
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-soft));
+}
+
+.icon-btn:active {
+  transform: translateY(1px);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 60%, transparent);
+  outline-offset: 2px;
+}
+
+.icon-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.icon-btn-pause {
+  --icon-btn-color: var(--primary);
+}
+
+.icon-btn-resume {
+  --icon-btn-color: var(--primary);
+}
+
+.icon-btn-danger {
+  --icon-btn-color: var(--primary);
+}
+
+.icon-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 9px);
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(3px);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 20;
+}
+
+.icon-btn[data-tooltip]::before {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: calc(100% + 4px);
+  width: 8px;
+  height: 8px;
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--foreground);
+  transform: rotate(-45deg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 19;
+}
+
+.icon-btn[data-tooltip]:hover::after,
+.icon-btn[data-tooltip]:hover::before,
+.icon-btn[data-tooltip]:focus-visible::after,
+.icon-btn[data-tooltip]:focus-visible::before {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .empty-state {
@@ -750,6 +873,153 @@ textarea {
   border-color: transparent;
   background: var(--accent);
   color: var(--accent-foreground);
+}
+
+.belt-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.belt-option {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--foreground);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 104px;
+  cursor: pointer;
+}
+
+.belt-option.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--foreground);
+}
+
+.belt-option-label {
+  line-height: 1;
+}
+
+.belt-icon {
+  --belt-tone: #111827;
+  --belt-border: #374151;
+  position: relative;
+  width: 28px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.belt-icon-band {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--belt-tone);
+  border: 1px solid var(--belt-border);
+}
+
+.belt-icon-knot {
+  position: absolute;
+  width: 7px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--belt-tone);
+  border: 1px solid var(--belt-border);
+  box-shadow: 0 1px 1px color-mix(in srgb, #000000 24%, transparent);
+}
+
+.belt-tone-white {
+  --belt-tone: #f8fafc;
+  --belt-border: #94a3b8;
+}
+
+.belt-tone-gray {
+  --belt-tone: #9ca3af;
+  --belt-border: #6b7280;
+}
+
+.belt-tone-orange {
+  --belt-tone: #f97316;
+  --belt-border: #c2410c;
+}
+
+.belt-tone-green {
+  --belt-tone: #16a34a;
+  --belt-border: #15803d;
+}
+
+.belt-tone-blue {
+  --belt-tone: #2563eb;
+  --belt-border: #1d4ed8;
+}
+
+.belt-tone-purple {
+  --belt-tone: #7c3aed;
+  --belt-border: #6d28d9;
+}
+
+.belt-tone-brown {
+  --belt-tone: #8b5e34;
+  --belt-border: #6b4423;
+}
+
+.belt-tone-black {
+  --belt-tone: #111827;
+  --belt-border: #374151;
+}
+
+.gral-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gral-option {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--foreground);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 108px;
+  cursor: pointer;
+}
+
+.gral-option.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
+.gral-icon-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.gral-icon {
+  width: 5px;
+  height: 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 38%, var(--line));
+}
+
+.gral-icon.active {
+  background: color-mix(in srgb, var(--accent) 78%, #111111);
+}
+
+.gral-label {
+  line-height: 1;
 }
 
 .error-text {
