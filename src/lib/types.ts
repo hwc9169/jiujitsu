@@ -13,8 +13,10 @@ export type Member = {
   belt: MemberBelt | null;
   belt_gral: MemberBeltGral | null;
   birth_date: string | null;
+  join_date: string | null;
   start_date: string | null;
   expire_date: string; // YYYY-MM-DD
+  effective_expire_date?: string | null;
   membership_state: MembershipState | null;
   paused_at: string | null;
   paused_days_total: number | null;

@@ -83,6 +83,22 @@ function addMonthsToDateString(baseDate: string, months: number) {
   return toDateString(new Date(monthStart.getFullYear(), monthStart.getMonth(), day));
 }
 
+function resolveRegistrationPlan(baseDate: string, expireDate: string): RegistrationPlanValue | "" {
+  if (!baseDate || !expireDate) return "";
+  for (const plan of REGISTRATION_PLANS) {
+    if (addMonthsToDateString(baseDate, Number(plan.value)) === expireDate) {
+      return plan.value;
+    }
+  }
+  return "";
+}
+
+function addDaysToDateString(baseDate: string, days: number) {
+  const date = parseDateOnly(baseDate);
+  date.setDate(date.getDate() + days);
+  return toDateString(date);
+}
+
 function dayDiffFromToday(expireDate: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -98,11 +114,25 @@ function statusFromExpireDate(expireDate: string): MemberStatus {
   return "NORMAL";
 }
 
+function resolveEffectiveExpireDate(member: Member): string {
+  if (member.effective_expire_date) return member.effective_expire_date;
+  if (member.membership_state !== "PAUSED" || !member.paused_at) return member.expire_date;
+
+  const pausedStart = new Date(member.paused_at);
+  if (Number.isNaN(pausedStart.getTime())) return member.expire_date;
+
+  const today = new Date();
+  const pausedStartMidnight = new Date(pausedStart.getFullYear(), pausedStart.getMonth(), pausedStart.getDate());
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const pausedDays = Math.max(0, Math.floor((todayMidnight.getTime() - pausedStartMidnight.getTime()) / 86_400_000));
+  return pausedDays > 0 ? addDaysToDateString(member.expire_date, pausedDays) : member.expire_date;
+}
+
 function resolveStatus(member: Member): MemberStatus {
   if (member.status === "NORMAL" || member.status === "EXPIRING" || member.status === "OVERDUE") {
     return member.status;
   }
-  return statusFromExpireDate(member.expire_date);
+  return statusFromExpireDate(resolveEffectiveExpireDate(member));
 }
 
 function formatDday(diff: number) {
@@ -173,6 +203,14 @@ function MaterialDeleteIcon() {
   );
 }
 
+function MaterialSmsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2Zm0 14H5.17L4 17.17V4h16v12Zm-9-5h2v2h-2v-2Zm-4 0h2v2H7v-2Zm8 0h2v2h-2v-2Z" />
+    </svg>
+  );
+}
+
 export default function MembersPage() {
   const [tab, setTab] = useState<FilterStatus>("ALL");
   const [qInput, setQInput] = useState("");
@@ -183,6 +221,7 @@ export default function MembersPage() {
   const [items, setItems] = useState<Member[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [notifyingId, setNotifyingId] = useState<string | null>(null);
 
   // modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -253,6 +292,27 @@ export default function MembersPage() {
     await load();
   };
 
+  const onSendOverdueNotice = async (m: Member) => {
+    const status = resolveStatus(m);
+    if (status !== "OVERDUE") {
+      alert("미납 회원에게만 안내 문자를 보낼 수 있습니다.");
+      return;
+    }
+    if (!confirm(`${m.name} 회원에게 미납 안내 문자를 보낼까요?`)) return;
+
+    setNotifyingId(m.id);
+    try {
+      const result = await apiFetch<{ sid?: string }>(`/api/members/${m.id}/notify-overdue`, {
+        method: "POST",
+      });
+      alert(result.sid ? `문자 발송 완료 (SID: ${result.sid})` : "문자 발송 완료");
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "문자 발송 중 오류가 발생했습니다.");
+    } finally {
+      setNotifyingId(null);
+    }
+  };
+
   return (
     <AdminShell
       title="회원 관리"
@@ -316,6 +376,7 @@ export default function MembersPage() {
                   <th>띠</th>
                   <th>나이</th>
                   <th>전화번호</th>
+                  <th>입관날짜</th>
                   <th>등록상태</th>
                   <th>만료일</th>
                   <th>메모</th>
@@ -329,7 +390,8 @@ export default function MembersPage() {
                   const beltGral = resolveBeltGral(m);
                   const beltToneClass = m.belt ? BELT_TONE_CLASS[m.belt] : "";
                   const age = calculateAge(m.birth_date);
-                  const diff = dayDiffFromToday(m.expire_date);
+                  const effectiveExpireDate = resolveEffectiveExpireDate(m);
+                  const diff = dayDiffFromToday(effectiveExpireDate);
                   const expireTone = diff < 0 ? "expire-overdue" : diff <= 7 ? "expire-warning" : "expire-normal";
                   let registrationClass = "chip chip-normal";
                   let registrationLabel = "활성";
@@ -364,11 +426,12 @@ export default function MembersPage() {
                       </td>
                       <td>{age == null ? "-" : `${age}세`}</td>
                       <td className="member-phone">{formatPhoneDisplay(m.phone)}</td>
+                      <td>{m.join_date ?? "-"}</td>
                       <td>
                         <span className={registrationClass}>{registrationLabel}</span>
                       </td>
                       <td className={expireTone}>
-                        {m.expire_date}
+                        {effectiveExpireDate}
                         <span className="expire-dday">{formatDday(diff)}</span>
                       </td>
                       <td>{m.memo?.trim() || "-"}</td>
@@ -394,6 +457,19 @@ export default function MembersPage() {
                           >
                             {membershipState === "PAUSED" ? <MaterialPlayIcon /> : <MaterialPauseIcon />}
                           </button>
+                          {status === "OVERDUE" ? (
+                            <button
+                              type="button"
+                              className="icon-btn icon-btn-sms"
+                              data-tooltip={notifyingId === m.id ? "문자 전송 중..." : "미납 안내 문자 발송"}
+                              aria-label="미납 안내 문자 발송"
+                              title="미납 안내 문자 발송"
+                              onClick={() => onSendOverdueNotice(m)}
+                              disabled={notifyingId === m.id}
+                            >
+                              <MaterialSmsIcon />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="icon-btn icon-btn-danger"
@@ -458,14 +534,19 @@ function MemberModal({
   onSaved: () => void | Promise<void>;
 }) {
   const isEdit = !!member;
-  const defaultStartDate = formatDateInput(member?.start_date ?? (!isEdit ? todayYYYYMMDD() : null));
-  const defaultRegistrationMonths: RegistrationPlanValue | "" = isEdit ? "" : "1";
+  const defaultJoinDate = formatDateInput(
+    member?.join_date ?? member?.start_date ?? member?.created_at?.slice(0, 10) ?? todayYYYYMMDD(),
+  );
+  const defaultPaymentDate = formatDateInput(member?.start_date ?? (!isEdit ? todayYYYYMMDD() : null));
   const defaultExpireDate = formatDateInput(
     member?.expire_date ??
       (!isEdit
-        ? addMonthsToDateString(defaultStartDate || todayYYYYMMDD(), Number(defaultRegistrationMonths))
+        ? addMonthsToDateString(defaultPaymentDate || todayYYYYMMDD(), 1)
         : todayYYYYMMDD()),
   );
+  const defaultRegistrationMonths: RegistrationPlanValue | "" = isEdit
+    ? resolveRegistrationPlan(defaultPaymentDate, defaultExpireDate)
+    : "1";
 
   const [name, setName] = useState(member?.name ?? "");
   const [gender, setGender] = useState<MemberGender | "">(member?.gender ?? (isEdit ? "" : "남"));
@@ -473,7 +554,8 @@ function MemberModal({
   const [beltGral, setBeltGral] = useState<MemberBeltGral>(member?.belt_gral ?? 0);
   const [phone, setPhone] = useState(member?.phone ?? "");
   const [birthDate, setBirthDate] = useState(formatDateInput(member?.birth_date));
-  const [startDate, setStartDate] = useState(defaultStartDate);
+  const [joinDate, setJoinDate] = useState(defaultJoinDate);
+  const [paymentDate, setPaymentDate] = useState(defaultPaymentDate);
   const [expireDate, setExpireDate] = useState(defaultExpireDate);
   const [memo, setMemo] = useState(member?.memo ?? "");
   const [registrationMonths, setRegistrationMonths] = useState<RegistrationPlanValue | "">(defaultRegistrationMonths);
@@ -481,8 +563,8 @@ function MemberModal({
   const [err, setErr] = useState<string | null>(null);
 
   const applyRegistrationPlan = (plan: RegistrationPlanValue) => {
-    const baseDate = startDate || todayYYYYMMDD();
-    if (!startDate) setStartDate(baseDate);
+    const baseDate = paymentDate || todayYYYYMMDD();
+    if (!paymentDate) setPaymentDate(baseDate);
     setRegistrationMonths(plan);
     setExpireDate(addMonthsToDateString(baseDate, Number(plan)));
   };
@@ -509,9 +591,10 @@ function MemberModal({
         belt_gral: beltGral,
         phone: normalizedPhone,
         birth_date: birthDate || null,
-        start_date: startDate ? startDate : null,
+        start_date: paymentDate ? paymentDate : null,
         expire_date: expireDate,
         memo: memo.trim() ? memo.trim() : null,
+        ...(isEdit ? {} : { join_date: joinDate || todayYYYYMMDD() }),
       };
 
       if (isEdit) {
@@ -635,19 +718,30 @@ function MemberModal({
                 className="input"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value.replace(/[^\d-]/g, ""))}
-                placeholder="010-1234-5678"
+                placeholder="01012345678"
               />
             </label>
 
             <label className="field-label">
-              시작일
+              입관 날짜
               <input
                 className="input"
                 type="date"
-                value={startDate}
+                value={joinDate}
+                onChange={(e) => setJoinDate(e.target.value)}
+                disabled={isEdit}
+              />
+            </label>
+
+            <label className="field-label">
+              결제일
+              <input
+                className="input"
+                type="date"
+                value={paymentDate}
                 onChange={(e) => {
                   const nextDate = e.target.value;
-                  setStartDate(nextDate);
+                  setPaymentDate(nextDate);
                   if (registrationMonths) {
                     const baseDate = nextDate || todayYYYYMMDD();
                     setExpireDate(addMonthsToDateString(baseDate, Number(registrationMonths)));
@@ -656,23 +750,21 @@ function MemberModal({
               />
             </label>
 
-            {!isEdit ? (
-              <label className="field-label">
-                등록 기간
-                <div className="duration-options">
-                  {REGISTRATION_PLANS.map((plan) => (
-                    <button
-                      key={plan.value}
-                      type="button"
-                      className={`duration-option ${registrationMonths === plan.value ? "active" : ""}`}
-                      onClick={() => applyRegistrationPlan(plan.value)}
-                    >
-                      {plan.label}
-                    </button>
-                  ))}
-                </div>
-              </label>
-            ) : null}
+            <label className="field-label">
+              등록 기간
+              <div className="duration-options">
+                {REGISTRATION_PLANS.map((plan) => (
+                  <button
+                    key={plan.value}
+                    type="button"
+                    className={`duration-option ${registrationMonths === plan.value ? "active" : ""}`}
+                    onClick={() => applyRegistrationPlan(plan.value)}
+                  >
+                    {plan.label}
+                  </button>
+                ))}
+              </div>
+            </label>
 
             <label className="field-label">
               만료일*

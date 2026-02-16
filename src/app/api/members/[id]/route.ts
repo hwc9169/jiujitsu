@@ -83,6 +83,10 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     const patch = await req.json();
     const action = typeof patch?.action === "string" ? patch.action.toUpperCase() : null;
 
+    if ("join_date" in patch) {
+      return NextResponse.json({ error: "join_date cannot be updated" }, { status: 400 });
+    }
+
     const sb = supabaseServer();
 
     if (action === "PAUSE") {

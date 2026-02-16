@@ -2,11 +2,12 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireUserIdFromAuthHeader, getGymIdByUserId } from "@/lib/supabase/gym";
-import type { MemberGender } from "@/lib/types";
+import type { MemberGender, MemberStatus } from "@/lib/types";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const BELT_VALUES = ["흰띠", "그레이띠", "오렌지띠", "초록띠", "파란띠", "보라띠", "갈색띠", "검은띠"] as const;
 const BELT_GRAL_VALUES = [0, 1, 2, 3, 4] as const;
+const ONE_DAY_MS = 86_400_000;
 
 function normalizeGender(value: unknown): MemberGender | null {
   if (typeof value !== "string") return null;
@@ -51,6 +52,49 @@ function normalizeDate(value: unknown): string | null {
   return normalized;
 }
 
+function toDateOnly(dateString: string): Date {
+  const [y, m, d] = dateString.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+function toDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function addDaysToDateString(base: string, days: number): string {
+  const date = toDateOnly(base);
+  date.setDate(date.getDate() + days);
+  return toDateString(date);
+}
+
+function statusFromExpireDate(expireDate: string): MemberStatus {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expire = toDateOnly(expireDate);
+  expire.setHours(0, 0, 0, 0);
+  const diff = Math.floor((expire.getTime() - today.getTime()) / ONE_DAY_MS);
+  if (diff < 0) return "OVERDUE";
+  if (diff <= 7) return "EXPIRING";
+  return "NORMAL";
+}
+
+function computeEffectiveExpireDate(expireDate: string, membershipState: unknown, pausedAt: unknown): string {
+  if (membershipState !== "PAUSED") return expireDate;
+  if (typeof pausedAt !== "string" || !pausedAt) return expireDate;
+
+  const pausedStart = new Date(pausedAt);
+  if (Number.isNaN(pausedStart.getTime())) return expireDate;
+
+  const today = new Date();
+  const pausedStartMidnight = new Date(pausedStart.getFullYear(), pausedStart.getMonth(), pausedStart.getDate());
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const pausedDays = Math.max(0, Math.floor((todayMidnight.getTime() - pausedStartMidnight.getTime()) / ONE_DAY_MS));
+  return pausedDays > 0 ? addDaysToDateString(expireDate, pausedDays) : expireDate;
+}
+
 export async function GET(req: Request) {
   try {
     const userId = await requireUserIdFromAuthHeader(req);
@@ -58,7 +102,10 @@ export async function GET(req: Request) {
     if (!gymId) return NextResponse.json({ error: "No gym" }, { status: 404 });
 
     const url = new URL(req.url);
-    const status = url.searchParams.get("status"); // NORMAL | EXPIRING | OVERDUE
+    const rawStatus = url.searchParams.get("status"); // NORMAL | EXPIRING | OVERDUE
+    const status = rawStatus && ["NORMAL", "EXPIRING", "OVERDUE"].includes(rawStatus)
+      ? rawStatus as MemberStatus
+      : null;
     const q = url.searchParams.get("q") || "";
     const page = Number(url.searchParams.get("page") || "1");
     const pageSize = Math.min(Number(url.searchParams.get("pageSize") || "50"), 200);
@@ -68,25 +115,34 @@ export async function GET(req: Request) {
     const sb = supabaseServer();
 
     let query = sb
-      .from("v_members_with_status")
-      .select("*", { count: "exact" })
+      .from("members")
+      .select("*")
       .eq("gym_id", gymId)
-      .is("deleted_at", null)
-      .order("expire_date", { ascending: true })
-      .range(from, to);
+      .is("deleted_at", null);
 
-    if (status && ["NORMAL", "EXPIRING", "OVERDUE"].includes(status)) {
-      query = query.eq("status", status);
-    }
     if (q) {
       // 이름 or 폰번호 부분검색
       query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
     }
 
-    const { data, error, count } = await query;
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ items: data ?? [], count: count ?? 0, page, pageSize });
+    const normalized = (data ?? []).map((member) => {
+      const baseExpireDate = String(member.expire_date);
+      const effectiveExpireDate = computeEffectiveExpireDate(baseExpireDate, member.membership_state, member.paused_at);
+      return {
+        ...member,
+        effective_expire_date: effectiveExpireDate,
+        status: statusFromExpireDate(effectiveExpireDate),
+      };
+    });
+
+    const filtered = status ? normalized.filter((member) => member.status === status) : normalized;
+    filtered.sort((a, b) => String(a.effective_expire_date).localeCompare(String(b.effective_expire_date)));
+    const items = filtered.slice(from, to + 1);
+
+    return NextResponse.json({ items, count: filtered.length, page, pageSize });
   } catch (e: unknown) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Internal server error" },
@@ -105,12 +161,16 @@ export async function POST(req: Request) {
     const { name, gender, memo } = body;
     const phone = normalizePhone(body.phone);
     const normalizedGender = normalizeGender(gender);
+    const joinDate = normalizeDate(body.join_date);
     const startDate = normalizeDate(body.start_date);
     const expireDate = normalizeDate(body.expire_date);
     const birthDate = normalizeDate(body.birth_date);
     const belt = normalizeBelt(body.belt);
     const beltGral = normalizeBeltGral(body.belt_gral);
 
+    if (body.join_date != null && body.join_date !== "" && !joinDate) {
+      return NextResponse.json({ error: "join_date must be YYYY-MM-DD" }, { status: 400 });
+    }
     if (body.start_date != null && body.start_date !== "" && !startDate) {
       return NextResponse.json({ error: "start_date must be YYYY-MM-DD" }, { status: 400 });
     }
@@ -127,6 +187,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "name, phone, gender, belt, belt_gral, expire_date are required" }, { status: 400 });
     }
 
+    const effectiveJoinDate = joinDate ?? toDateString(new Date());
+
     const sb = supabaseServer();
     const { data, error } = await sb
       .from("members")
@@ -138,6 +200,7 @@ export async function POST(req: Request) {
         belt,
         belt_gral: beltGral,
         birth_date: birthDate,
+        join_date: effectiveJoinDate,
         start_date: startDate,
         expire_date: expireDate,
         membership_state: "ACTIVE",

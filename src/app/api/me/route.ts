@@ -1,27 +1,28 @@
 import { NextResponse } from "next/server";
-import { requireUserIdFromAuthHeader } from "@/lib/supabase/gym";
+import { getGymIdByUserId, requireUserIdFromAuthHeader } from "@/lib/supabase/gym";
 import { supabaseServer } from "@/lib/supabase/server";
+
+function isUnauthorizedErrorMessage(message: string) {
+  return message.includes("Missing Authorization Bearer token") || message.includes("Invalid token");
+}
 
 export async function GET(req: Request) {
   try {
     const userId = await requireUserIdFromAuthHeader(req);
+    const gymId = await getGymIdByUserId(userId);
     const sb = supabaseServer();
 
-    // gym_users -> gyms 조인
-    const { data, error } = await sb
-      .from("gym_users")
-      .select("gym_id, role, gyms:gyms(id, name)")
-      .eq("user_id", userId)
-      .limit(1)
-      .maybeSingle();
+    let gymName: string | null = null;
+    if (gymId) {
+      const { data, error } = await sb.from("gyms").select("name").eq("id", gymId).limit(1).maybeSingle();
+      if (error) throw new Error(error.message);
+      gymName = data?.name ?? null;
+    }
 
-    if (error) throw new Error(error.message);
-
-    const gymId = data?.gym_id ?? null;
-    const gymName = (data as any)?.gyms?.name ?? null;
-
-    return NextResponse.json({ userId, gymId, gymName });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 401 });
+    return NextResponse.json({ userId, gymId: gymId ?? null, gymName });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Internal server error";
+    const status = isUnauthorizedErrorMessage(message) ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -42,6 +42,12 @@ function toFriendlyAuthError(message: string) {
   if (normalized.includes("kakao sdk")) {
     return "카카오 SDK 초기화에 실패했습니다. JavaScript SDK 도메인과 JavaScript 키를 확인해 주세요.";
   }
+  if (normalized.includes("invalid login credentials")) {
+    return "이메일 또는 비밀번호가 올바르지 않습니다.";
+  }
+  if (normalized.includes("email not confirmed")) {
+    return "이메일 인증 후 로그인해 주세요.";
+  }
   return message;
 }
 
@@ -80,7 +86,10 @@ export default function LoginPage() {
 
   const [checkingSession, setCheckingSession] = useState(true);
   const [kakaoReady, setKakaoReady] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [kakaoLoading, setKakaoLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -155,7 +164,7 @@ export default function LoginPage() {
 
   const signInWithKakao = async () => {
     setErr(null);
-    setLoading(true);
+    setKakaoLoading(true);
     try {
       if (!window.Kakao || !kakaoReady) {
         throw new Error("Kakao SDK is unavailable");
@@ -169,7 +178,33 @@ export default function LoginPage() {
       });
     } catch (e: unknown) {
       setErr(e instanceof Error ? toFriendlyAuthError(e.message) : "카카오 로그인 중 오류가 발생했습니다.");
-      setLoading(false);
+      setKakaoLoading(false);
+    }
+  };
+
+  const signInWithEmail = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErr(null);
+
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) {
+      setErr("이메일과 비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    setEmailLoading(true);
+    try {
+      const sb = supabaseBrowser();
+      const { error } = await sb.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+      if (error) throw error;
+      router.replace("/app");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? toFriendlyAuthError(e.message) : "이메일 로그인 중 오류가 발생했습니다.");
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -187,22 +222,58 @@ export default function LoginPage() {
           />
         </div>
         <h1 className="auth-title">관리자 로그인</h1>
-        <p className="auth-subtitle">카카오 로그인 1회로 회원가입과 로그인이 자동 처리됩니다.</p>
+        <p className="auth-subtitle">이메일 또는 카카오로 로그인하세요.</p>
 
         {err ? <div className="alert-error">{err}</div> : null}
+
+        <form className="auth-fields" onSubmit={signInWithEmail}>
+          <label className="field-label">
+            이메일
+            <input
+              className="input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              placeholder="you@example.com"
+            />
+          </label>
+          <label className="field-label">
+            비밀번호
+            <input
+              className="input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              placeholder="비밀번호"
+            />
+          </label>
+          <button
+            type="submit"
+            className="btn btn-primary auth-action"
+            disabled={checkingSession || kakaoLoading || emailLoading}
+          >
+            {emailLoading ? "이메일 로그인 중..." : "이메일로 로그인"}
+          </button>
+        </form>
+
+        <div className="auth-divider" role="separator" aria-label="카카오 로그인 구분선">
+          <span>또는 카카오 로그인</span>
+        </div>
 
         <div className="auth-actions">
           <button
             type="button"
             className="btn btn-kakao auth-action"
             onClick={signInWithKakao}
-            disabled={loading || checkingSession || !kakaoReady}
+            disabled={kakaoLoading || emailLoading || checkingSession || !kakaoReady}
           >
             {checkingSession
               ? "로그인 상태 확인 중..."
               : !kakaoReady
                 ? "카카오 SDK 준비 중..."
-                : loading
+                : kakaoLoading
                   ? "카카오로 이동 중..."
                   : "카카오로 시작하기"}
           </button>
