@@ -682,6 +682,12 @@ textarea {
   color: color-mix(in srgb, var(--foreground) 75%, var(--muted));
 }
 
+.chip-inactive {
+  border-color: color-mix(in srgb, var(--muted) 35%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft) 80%, var(--line));
+  color: var(--muted);
+}
+
 .expire-overdue {
   color: var(--danger);
   font-weight: 700;
@@ -708,6 +714,11 @@ textarea {
   justify-content: flex-start;
   align-items: center;
   gap: 8px;
+}
+
+.table-actions-disabled {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .icon-btn {

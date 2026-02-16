@@ -4,6 +4,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { requireUserIdFromAuthHeader, getGymIdByUserId } from "@/lib/supabase/gym";
 import type { MemberGender, MemberStatus } from "@/lib/types";
 
+type MembersFilterStatus = MemberStatus | "INACTIVE";
+
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const BELT_VALUES = ["흰띠", "그레이띠", "오렌지띠", "초록띠", "파란띠", "보라띠", "갈색띠", "검은띠"] as const;
 const BELT_GRAL_VALUES = [0, 1, 2, 3, 4] as const;
@@ -102,9 +104,9 @@ export async function GET(req: Request) {
     if (!gymId) return NextResponse.json({ error: "No gym" }, { status: 404 });
 
     const url = new URL(req.url);
-    const rawStatus = url.searchParams.get("status"); // NORMAL | EXPIRING | OVERDUE
-    const status = rawStatus && ["NORMAL", "EXPIRING", "OVERDUE"].includes(rawStatus)
-      ? rawStatus as MemberStatus
+    const rawStatus = url.searchParams.get("status"); // NORMAL | EXPIRING | OVERDUE | INACTIVE
+    const status = rawStatus && ["NORMAL", "EXPIRING", "OVERDUE", "INACTIVE"].includes(rawStatus)
+      ? rawStatus as MembersFilterStatus
       : null;
     const q = url.searchParams.get("q") || "";
     const page = Number(url.searchParams.get("page") || "1");
@@ -117,8 +119,13 @@ export async function GET(req: Request) {
     let query = sb
       .from("members")
       .select("*")
-      .eq("gym_id", gymId)
-      .is("deleted_at", null);
+      .eq("gym_id", gymId);
+
+    if (status === "INACTIVE") {
+      query = query.not("deleted_at", "is", null);
+    } else {
+      query = query.is("deleted_at", null);
+    }
 
     if (q) {
       // 이름 or 폰번호 부분검색
@@ -131,15 +138,23 @@ export async function GET(req: Request) {
     const normalized = (data ?? []).map((member) => {
       const baseExpireDate = String(member.expire_date);
       const effectiveExpireDate = computeEffectiveExpireDate(baseExpireDate, member.membership_state, member.paused_at);
+      const computedStatus = member.deleted_at ? "DELETED" : statusFromExpireDate(effectiveExpireDate);
       return {
         ...member,
         effective_expire_date: effectiveExpireDate,
-        status: statusFromExpireDate(effectiveExpireDate),
+        status: computedStatus,
       };
     });
 
-    const filtered = status ? normalized.filter((member) => member.status === status) : normalized;
-    filtered.sort((a, b) => String(a.effective_expire_date).localeCompare(String(b.effective_expire_date)));
+    const filtered = status && status !== "INACTIVE"
+      ? normalized.filter((member) => member.status === status)
+      : normalized;
+
+    if (status === "INACTIVE") {
+      filtered.sort((a, b) => String(b.deleted_at ?? "").localeCompare(String(a.deleted_at ?? "")));
+    } else {
+      filtered.sort((a, b) => String(a.effective_expire_date).localeCompare(String(b.effective_expire_date)));
+    }
     const items = filtered.slice(from, to + 1);
 
     return NextResponse.json({ items, count: filtered.length, page, pageSize });

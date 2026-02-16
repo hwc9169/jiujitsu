@@ -12,13 +12,14 @@ type MembersResponse = {
   pageSize: number;
 };
 
-type FilterStatus = MemberStatus | "ALL";
+type FilterStatus = MemberStatus | "INACTIVE" | "ALL";
 
 const TABS: { key: FilterStatus; label: string }[] = [
   { key: "ALL", label: "전체" },
   { key: "NORMAL", label: "정상" },
   { key: "EXPIRING", label: "7일 이내" },
   { key: "OVERDUE", label: "미납" },
+  { key: "INACTIVE", label: "탈퇴(비활성)" },
 ];
 
 const GENDER_OPTIONS: MemberGender[] = ["남", "여"];
@@ -265,8 +266,8 @@ export default function MembersPage() {
     setModalOpen(true);
   };
 
-  const onDelete = async (m: Member) => {
-    if (!confirm(`${m.name} 삭제(복구 가능)할까?`)) return;
+  const onDeactivateMember = async (m: Member) => {
+    if (!confirm(`${m.name} 회원을 탈퇴 처리할까요? (비활성화)`)) return;
     await apiFetch(`/api/members/${m.id}`, { method: "DELETE" });
     await load();
   };
@@ -316,7 +317,7 @@ export default function MembersPage() {
   return (
     <AdminShell
       title="회원 관리"
-      subtitle="만료일 기준 상태를 관리하고, 미납/만료예정 회원을 즉시 확인하세요."
+      subtitle="활성/미납/탈퇴(비활성) 회원을 필터로 관리하세요."
       actions={
         <button type="button" className="btn btn-accent" onClick={openCreate}>
           + 회원 추가
@@ -385,17 +386,21 @@ export default function MembersPage() {
               </thead>
               <tbody>
                 {items.map((m) => {
-                  const status = resolveStatus(m);
+                  const isInactive = Boolean(m.deleted_at) || m.status === "DELETED";
+                  const status = isInactive ? null : resolveStatus(m);
                   const membershipState = resolveMembershipState(m);
                   const beltGral = resolveBeltGral(m);
                   const beltToneClass = m.belt ? BELT_TONE_CLASS[m.belt] : "";
                   const age = calculateAge(m.birth_date);
-                  const effectiveExpireDate = resolveEffectiveExpireDate(m);
-                  const diff = dayDiffFromToday(effectiveExpireDate);
-                  const expireTone = diff < 0 ? "expire-overdue" : diff <= 7 ? "expire-warning" : "expire-normal";
+                  const effectiveExpireDate = isInactive ? null : resolveEffectiveExpireDate(m);
+                  const diff = effectiveExpireDate ? dayDiffFromToday(effectiveExpireDate) : null;
+                  const expireTone = diff == null ? "" : diff < 0 ? "expire-overdue" : diff <= 7 ? "expire-warning" : "expire-normal";
                   let registrationClass = "chip chip-normal";
                   let registrationLabel = "활성";
-                  if (status === "OVERDUE") {
+                  if (isInactive) {
+                    registrationClass = "chip chip-inactive";
+                    registrationLabel = "탈퇴";
+                  } else if (status === "OVERDUE") {
                     registrationClass = "chip chip-overdue";
                     registrationLabel = "미납";
                   } else if (membershipState === "PAUSED") {
@@ -431,56 +436,60 @@ export default function MembersPage() {
                         <span className={registrationClass}>{registrationLabel}</span>
                       </td>
                       <td className={expireTone}>
-                        {effectiveExpireDate}
-                        <span className="expire-dday">{formatDday(diff)}</span>
+                        {effectiveExpireDate ?? "-"}
+                        {diff == null ? null : <span className="expire-dday">{formatDday(diff)}</span>}
                       </td>
                       <td>{m.memo?.trim() || "-"}</td>
                       <td>
-                        <div className="table-actions">
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            data-tooltip="회원 정보 수정"
-                            aria-label="회원 정보 수정"
-                            title="회원 정보 수정"
-                            onClick={() => openEdit(m)}
-                          >
-                            <MaterialEditIcon />
-                          </button>
-                          <button
-                            type="button"
-                            className={`icon-btn ${membershipState === "PAUSED" ? "icon-btn-resume" : "icon-btn-pause"}`}
-                            data-tooltip={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
-                            aria-label={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
-                            title={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
-                            onClick={() => onTogglePause(m)}
-                          >
-                            {membershipState === "PAUSED" ? <MaterialPlayIcon /> : <MaterialPauseIcon />}
-                          </button>
-                          {status === "OVERDUE" ? (
+                        {isInactive ? (
+                          <span className="table-actions-disabled">-</span>
+                        ) : (
+                          <div className="table-actions">
                             <button
                               type="button"
-                              className="icon-btn icon-btn-sms"
-                              data-tooltip={notifyingId === m.id ? "문자 전송 중..." : "미납 안내 문자 발송"}
-                              aria-label="미납 안내 문자 발송"
-                              title="미납 안내 문자 발송"
-                              onClick={() => onSendOverdueNotice(m)}
-                              disabled={notifyingId === m.id}
+                              className="icon-btn"
+                              data-tooltip="회원 정보 수정"
+                              aria-label="회원 정보 수정"
+                              title="회원 정보 수정"
+                              onClick={() => openEdit(m)}
                             >
-                              <MaterialSmsIcon />
+                              <MaterialEditIcon />
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="icon-btn icon-btn-danger"
-                            data-tooltip="회원 삭제"
-                            aria-label="회원 삭제"
-                            title="회원 삭제"
-                            onClick={() => onDelete(m)}
-                          >
-                            <MaterialDeleteIcon />
-                          </button>
-                        </div>
+                            <button
+                              type="button"
+                              className={`icon-btn ${membershipState === "PAUSED" ? "icon-btn-resume" : "icon-btn-pause"}`}
+                              data-tooltip={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
+                              aria-label={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
+                              title={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
+                              onClick={() => onTogglePause(m)}
+                            >
+                              {membershipState === "PAUSED" ? <MaterialPlayIcon /> : <MaterialPauseIcon />}
+                            </button>
+                            {status === "OVERDUE" ? (
+                              <button
+                                type="button"
+                                className="icon-btn icon-btn-sms"
+                                data-tooltip={notifyingId === m.id ? "문자 전송 중..." : "미납 안내 문자 발송"}
+                                aria-label="미납 안내 문자 발송"
+                                title="미납 안내 문자 발송"
+                                onClick={() => onSendOverdueNotice(m)}
+                                disabled={notifyingId === m.id}
+                              >
+                                <MaterialSmsIcon />
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="icon-btn icon-btn-danger"
+                              data-tooltip="회원 탈퇴(비활성화)"
+                              aria-label="회원 탈퇴"
+                              title="회원 탈퇴(비활성화)"
+                              onClick={() => onDeactivateMember(m)}
+                            >
+                              <MaterialDeleteIcon />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
