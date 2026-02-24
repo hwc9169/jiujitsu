@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { clearAdminImpersonationSession } from "@/lib/api_client";
 
 type KakaoExchangeResponse = {
   idToken: string;
@@ -62,6 +63,7 @@ export default function AuthCallbackPage() {
           access_token: exchangeJson.accessToken,
         });
         if (signInError) throw signInError;
+        clearAdminImpersonationSession();
 
         if (!mounted) return;
         router.replace("/app");

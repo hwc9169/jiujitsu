@@ -2,8 +2,13 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import {
+  clearAdminImpersonationSession,
+  getAdminImpersonationSession,
+} from "@/lib/api_client";
 
 const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
 const KAKAO_SDK_URL = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.9/kakao.min.js";
@@ -96,28 +101,49 @@ export default function LoginPage() {
     let mounted = true;
     const sb = supabaseBrowser();
 
-    sb.auth.getSession()
-      .then(({ data, error }) => {
+    const run = async () => {
+      const adminSession = getAdminImpersonationSession();
+      if (adminSession) {
+        const adminRes = await fetch("/api/me", {
+          method: "GET",
+          headers: {
+            "X-Admin-Impersonation-Email": adminSession.email,
+            "X-Admin-Impersonation-Code": adminSession.code,
+          },
+          cache: "no-store",
+        });
         if (!mounted) return;
-        if (error) {
-          setErr(toFriendlyAuthError(error.message));
-          setCheckingSession(false);
-          return;
-        }
-        if (data.session) {
+        if (adminRes.ok) {
           router.replace("/app");
           return;
         }
+        clearAdminImpersonationSession();
+      }
+
+      const { data, error } = await sb.auth.getSession();
+      if (!mounted) return;
+      if (error) {
+        setErr(toFriendlyAuthError(error.message));
         setCheckingSession(false);
-      })
-      .catch((e: unknown) => {
-        if (!mounted) return;
-        setErr(e instanceof Error ? toFriendlyAuthError(e.message) : "로그인 상태를 확인하지 못했습니다.");
-        setCheckingSession(false);
-      });
+        return;
+      }
+      if (data.session) {
+        clearAdminImpersonationSession();
+        router.replace("/app");
+        return;
+      }
+      setCheckingSession(false);
+    };
+
+    run().catch((e: unknown) => {
+      if (!mounted) return;
+      setErr(e instanceof Error ? toFriendlyAuthError(e.message) : "로그인 상태를 확인하지 못했습니다.");
+      setCheckingSession(false);
+    });
 
     const { data: authListener } = sb.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) {
+        clearAdminImpersonationSession();
         router.replace("/app");
       }
     });
@@ -166,6 +192,7 @@ export default function LoginPage() {
     setErr(null);
     setKakaoLoading(true);
     try {
+      clearAdminImpersonationSession();
       if (!window.Kakao || !kakaoReady) {
         throw new Error("Kakao SDK is unavailable");
       }
@@ -194,6 +221,7 @@ export default function LoginPage() {
 
     setEmailLoading(true);
     try {
+      clearAdminImpersonationSession();
       const sb = supabaseBrowser();
       const { error } = await sb.auth.signInWithPassword({
         email: normalizedEmail,
@@ -221,7 +249,7 @@ export default function LoginPage() {
             priority
           />
         </div>
-        <h1 className="auth-title">관리자 로그인</h1>
+        <h1 className="auth-title">로그인</h1>
         <p className="auth-subtitle">이메일 또는 카카오로 로그인하세요.</p>
 
         {err ? <div className="alert-error">{err}</div> : null}

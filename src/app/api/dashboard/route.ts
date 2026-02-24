@@ -31,22 +31,24 @@ type MonthRef = {
 const DEFAULT_UNIT_PRICE = 150000;
 const MIN_UNIT_PRICE = 10000;
 const MAX_UNIT_PRICE = 500000;
+const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function parseDateOnly(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, (month || 1) - 1, day || 1);
 }
 
-function parseISODate(value: string) {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
+function parseDateParts(value: string) {
+  const matched = DATE_ONLY_REGEX.exec(value.trim());
+  if (!matched) return null;
 
-function monthKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
+  const year = Number(matched[1]);
+  const month = Number(matched[2]);
+  const day = Number(matched[3]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  return { year, month, day };
 }
 
 function monthKeyFromParts(year: number, month: number) {
@@ -112,14 +114,6 @@ function shiftMonth(base: MonthRef, delta: number) {
   } satisfies MonthRef;
 }
 
-function durationMonths(startDateRaw: string, expireDateRaw: string) {
-  const start = parseDateOnly(startDateRaw);
-  const end = parseDateOnly(expireDateRaw);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 1;
-  const diff = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-  return Math.max(1, diff);
-}
-
 function getDailySeries(year: number, month: number) {
   const days = new Date(year, month, 0).getDate();
   const points: DailySalesPoint[] = [];
@@ -177,11 +171,11 @@ export async function GET(req: Request) {
       const startSource = member.start_date || member.created_at.slice(0, 10);
       if (!startSource) continue;
 
-      const startDate = member.start_date ? parseDateOnly(member.start_date) : parseISODate(member.created_at);
-      if (Number.isNaN(startDate.getTime())) continue;
+      const startParts = parseDateParts(startSource);
+      if (!startParts) continue;
 
-      const estimatedSales = durationMonths(startSource, member.expire_date) * unitPrice;
-      const key = monthKey(startDate);
+      const estimatedSales = unitPrice;
+      const key = monthKeyFromParts(startParts.year, startParts.month);
       const monthBucket = monthlyMap.get(key) ?? { estimated_sales: 0, member_count: 0 };
       monthBucket.member_count += 1;
       monthBucket.estimated_sales += estimatedSales;
@@ -189,7 +183,7 @@ export async function GET(req: Request) {
 
       if (key !== selectedMonth.key) continue;
 
-      const dayIndex = startDate.getDate() - 1;
+      const dayIndex = startParts.day - 1;
       if (dayIndex < 0 || dayIndex >= dailySales.length) continue;
 
       dailySales[dayIndex].member_count += 1;

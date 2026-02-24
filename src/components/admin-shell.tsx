@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { apiFetch } from "@/lib/api_client";
+import { apiFetch, clearAdminImpersonationSession } from "@/lib/api_client";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 type MeResponse = {
@@ -51,6 +51,7 @@ export function AdminShell({ title, subtitle, actions, children }: AdminShellPro
   }, []);
 
   const logout = async () => {
+    clearAdminImpersonationSession();
     const sb = supabaseBrowser();
     await sb.auth.signOut();
     router.replace("/login");

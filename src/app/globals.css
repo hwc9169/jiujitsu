@@ -387,15 +387,23 @@ textarea {
 }
 
 .sales-line-chart {
-  width: 100%;
-  min-width: 720px;
-  height: 240px;
   display: block;
 }
 
 .sales-grid-line {
   stroke: color-mix(in srgb, var(--line) 75%, var(--surface));
   stroke-width: 1;
+}
+
+.sales-axis-line {
+  stroke: color-mix(in srgb, var(--line) 95%, var(--foreground));
+  stroke-width: 1.1;
+}
+
+.sales-y-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .sales-area-path {
@@ -410,6 +418,12 @@ textarea {
   stroke-linecap: round;
 }
 
+.sales-stem-line {
+  stroke: color-mix(in srgb, var(--primary) 45%, var(--line));
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
 .sales-point {
   fill: var(--primary-strong);
 }
@@ -418,21 +432,15 @@ textarea {
   fill: color-mix(in srgb, var(--muted) 60%, var(--line));
 }
 
-.sales-day-labels {
-  margin-top: 6px;
-  min-width: 720px;
-  display: grid;
-  gap: 0;
-}
-
-.sales-day-label {
-  text-align: center;
+.sales-x-label {
+  fill: var(--muted);
   font-size: 10px;
-  color: transparent;
+  font-weight: 600;
 }
 
-.sales-day-label.show {
-  color: var(--muted);
+.sales-x-label-active {
+  fill: var(--primary-strong);
+  font-weight: 700;
 }
 
 .sales-selected-summary {
@@ -1366,11 +1374,7 @@ textarea {
     min-width: 96px;
   }
 
-  .sales-line-chart {
-    min-width: 640px;
-  }
-
-  .sales-day-labels {
-    min-width: 640px;
+  .sales-y-label {
+    font-size: 10px;
   }
 }

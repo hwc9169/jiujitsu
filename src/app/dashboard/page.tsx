@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminShell } from "@/components/admin-shell";
 import { apiFetch } from "@/lib/api_client";
@@ -18,11 +18,8 @@ type Dashboard = {
   new_this_month: number;
   unit_price: number;
   selected_month: string;
-  selected_month_label: string;
   daily_sales: DailySalesPoint[];
   selected_month_sales: number;
-  current_month_sales: number;
-  previous_month_sales: number;
 };
 
 const DEFAULT_UNIT_PRICE = 150000;
@@ -49,6 +46,40 @@ function monthLabelFromKey(key: string) {
   const [year, month] = key.split("-").map(Number);
   if (!Number.isFinite(year) || !Number.isFinite(month)) return "-";
   return `${year}년 ${month}월`;
+}
+
+function normalizeSalesValue(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  if (value <= 0) return 0;
+  return value;
+}
+
+function getYAxisMax(highestSales: number) {
+  if (highestSales <= 0) return 100000;
+
+  if (highestSales >= 10_000_000) {
+    return Math.ceil(highestSales / 1_000_000) * 1_000_000;
+  }
+  if (highestSales >= 1_000_000) {
+    return Math.ceil(highestSales / 100_000) * 100_000;
+  }
+  return Math.ceil(highestSales / 10_000) * 10_000;
+}
+
+function buildYAxisTicks(maxValue: number) {
+  const steps = 4;
+  const ticks: number[] = [];
+  for (let i = 0; i <= steps; i += 1) {
+    ticks.push((maxValue / steps) * i);
+  }
+  return ticks.reverse();
+}
+
+function formatYAxisValue(value: number) {
+  if (value >= 10000) {
+    return `${Math.round(value / 10000).toLocaleString("ko-KR")}만`;
+  }
+  return value.toLocaleString("ko-KR");
 }
 
 export default function DashboardPage() {
@@ -93,29 +124,29 @@ export default function DashboardPage() {
   const expiringCount = data?.expiring_7d_count ?? 0;
   const newThisMonth = data?.new_this_month ?? 0;
   const selectedMonthKey = data?.selected_month ?? selectedMonth;
-  const selectedMonthLabel = data?.selected_month_label || monthLabelFromKey(selectedMonthKey);
   const dailySales = data?.daily_sales ?? EMPTY_DAILY_SALES;
   const selectedMonthSales = data?.selected_month_sales ?? 0;
-  const currentMonthSales = data?.current_month_sales ?? 0;
-  const previousMonthSales = data?.previous_month_sales ?? 0;
-  const unitPriceUsed = data?.unit_price ?? unitPrice;
-  const maxSales = Math.max(1, ...dailySales.map((point) => point.estimated_sales));
-  const monthDelta = currentMonthSales - previousMonthSales;
+  const salesValues = dailySales.map((point) => normalizeSalesValue(Number(point.estimated_sales)));
+  const highestSales = Math.max(0, ...salesValues);
+  const yAxisMax = getYAxisMax(highestSales);
+  const yTicks = buildYAxisTicks(yAxisMax);
 
-  const chartGeometry = useMemo(() => {
-    const width = Math.max(720, dailySales.length * 24);
-    const height = 260;
-    const left = 32;
-    const right = 20;
-    const top = 18;
-    const bottom = 36;
+  const chartGeometry = (() => {
+    const width = Math.max(760, dailySales.length * 46);
+    const height = 320;
+    const left = 68;
+    const right = 24;
+    const top = 22;
+    const bottom = 52;
     const plotWidth = Math.max(1, width - left - right);
     const plotHeight = Math.max(1, height - top - bottom);
 
     const points = dailySales.map((point, index) => {
       const x = dailySales.length <= 1 ? left : left + (index / (dailySales.length - 1)) * plotWidth;
-      const y = top + (1 - point.estimated_sales / maxSales) * plotHeight;
-      return { x, y, day: point.day, value: point.estimated_sales };
+      const rawValue = normalizeSalesValue(Number(point.estimated_sales));
+      const scaledValue = Math.min(rawValue, yAxisMax);
+      const y = top + (1 - scaledValue / yAxisMax) * plotHeight;
+      return { x, y, day: point.day, value: rawValue };
     });
 
     const line = points.map((point) => `${point.x},${point.y}`).join(" ");
@@ -123,13 +154,13 @@ export default function DashboardPage() {
       ? `M ${points[0].x} ${top + plotHeight} L ${points.map((point) => `${point.x} ${point.y}`).join(" L ")} L ${points[points.length - 1].x} ${top + plotHeight} Z`
       : "";
 
-    return { width, height, top, left, plotHeight, points, line, area };
-  }, [dailySales, maxSales]);
+    return { width, height, top, left, right, bottom, plotHeight, points, line, area };
+  })();
 
   return (
     <AdminShell
       title="운영 대시보드"
-      subtitle="이번 달 매출과 선택 월의 일별 매출 흐름을 확인하세요."
+      subtitle="월매출과 일별 매출 흐름을 확인하세요."
     >
       {error ? <div className="alert-error">{error}</div> : null}
 
@@ -174,7 +205,7 @@ export default function DashboardPage() {
             >
               ←
             </button>
-            <span className="sales-month-current">{selectedMonthKey}</span>
+            <span className="sales-month-current">{monthLabelFromKey(selectedMonthKey)}</span>
             <button
               type="button"
               className="btn btn-secondary sales-nav-btn"
@@ -188,70 +219,91 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-
-        <div className="panel-subhead">
-          <div>이번 달 추정 매출: {loading ? "-" : formatKRW(currentMonthSales)}</div>
-          <div className={monthDelta >= 0 ? "sales-delta-plus" : "sales-delta-minus"}>
-            전월 대비: {loading ? "-" : `${monthDelta >= 0 ? "+" : "-"}${formatKRW(Math.abs(monthDelta))}`}
-          </div>
-        </div>
-
         <div className="sales-selected-summary">
-          <p className="sales-selected-label">선택 월 매출 ({selectedMonthLabel})</p>
-          <p className="sales-selected-value">
-            {loading ? "-" : formatKRW(selectedMonthSales)}
-          </p>
-          <p className="sales-unit-note">
-            월 회비 단가 {formatKRW(unitPriceUsed)} 기준 (체육관 설정에서 변경)
-          </p>
+          <p className="sales-selected-label">월매출</p>
+          <p className="sales-selected-value">{loading ? "-" : formatKRW(selectedMonthSales)}</p>
         </div>
 
         <div className="sales-line-chart-wrap">
           <svg
             viewBox={`0 0 ${chartGeometry.width} ${chartGeometry.height}`}
             className="sales-line-chart"
+            style={{ width: `${chartGeometry.width}px`, height: `${chartGeometry.height}px` }}
             role="img"
-            aria-label={`${selectedMonthLabel} 일별 매출 라인 차트`}
+            aria-label={`${monthLabelFromKey(selectedMonthKey)} 일별 매출 라인 차트`}
             preserveAspectRatio="none"
           >
-            {[0, 0.25, 0.5, 0.75, 1].map((scale) => {
-              const y = chartGeometry.top + chartGeometry.plotHeight * scale;
+            {yTicks.map((tick) => {
+              const y = chartGeometry.top + (1 - tick / yAxisMax) * chartGeometry.plotHeight;
               return (
-                <line
-                  key={scale}
-                  x1={chartGeometry.left}
-                  x2={chartGeometry.width - 20}
-                  y1={y}
-                  y2={y}
-                  className="sales-grid-line"
-                />
+                <g key={tick}>
+                  <line
+                    x1={chartGeometry.left}
+                    x2={chartGeometry.width - chartGeometry.right}
+                    y1={y}
+                    y2={y}
+                    className="sales-grid-line"
+                  />
+                  <text x={chartGeometry.left - 10} y={y + 4} textAnchor="end" className="sales-y-label">
+                    {formatYAxisValue(tick)}
+                  </text>
+                </g>
               );
             })}
 
+            <line
+              x1={chartGeometry.left}
+              x2={chartGeometry.left}
+              y1={chartGeometry.top}
+              y2={chartGeometry.top + chartGeometry.plotHeight}
+              className="sales-axis-line"
+            />
+            <line
+              x1={chartGeometry.left}
+              x2={chartGeometry.width - chartGeometry.right}
+              y1={chartGeometry.top + chartGeometry.plotHeight}
+              y2={chartGeometry.top + chartGeometry.plotHeight}
+              className="sales-axis-line"
+            />
+
             {chartGeometry.area ? <path d={chartGeometry.area} className="sales-area-path" /> : null}
             {chartGeometry.line ? <polyline points={chartGeometry.line} className="sales-line-path" /> : null}
+
+            {chartGeometry.points.map((point) => (
+              point.value > 0 ? (
+                <line
+                  key={`stem-${point.day}`}
+                  x1={point.x}
+                  x2={point.x}
+                  y1={chartGeometry.top + chartGeometry.plotHeight}
+                  y2={point.y}
+                  className="sales-stem-line"
+                />
+              ) : null
+            ))}
 
             {chartGeometry.points.map((point) => (
               <circle
                 key={point.day}
                 cx={point.x}
                 cy={point.y}
-                r={point.value > 0 ? 2.7 : 1.9}
+                r={point.value > 0 ? 3.3 : 1.9}
                 className={point.value > 0 ? "sales-point" : "sales-point-empty"}
               />
             ))}
-          </svg>
 
-          <div
-            className="sales-day-labels"
-            style={{ gridTemplateColumns: `repeat(${Math.max(dailySales.length, 1)}, minmax(0, 1fr))` }}
-          >
-            {dailySales.map((point) => (
-              <span key={point.day} className={`sales-day-label ${point.day % 5 === 0 || point.day === 1 ? "show" : ""}`}>
-                {point.day}
-              </span>
+            {chartGeometry.points.map((point) => (
+              <text
+                key={`day-${point.day}`}
+                x={point.x}
+                y={chartGeometry.top + chartGeometry.plotHeight + 20}
+                textAnchor="middle"
+                className={`sales-x-label ${point.value > 0 ? "sales-x-label-active" : ""}`}
+              >
+                {point.day}일
+              </text>
             ))}
-          </div>
+          </svg>
         </div>
       </section>
 

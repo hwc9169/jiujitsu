@@ -3,7 +3,12 @@ import { getGymIdByUserId, requireUserIdFromAuthHeader } from "@/lib/supabase/gy
 import { supabaseServer } from "@/lib/supabase/server";
 
 function isUnauthorizedErrorMessage(message: string) {
-  return message.includes("Missing Authorization Bearer token") || message.includes("Invalid token");
+  return (
+    message.includes("Missing Authorization Bearer token") ||
+    message.includes("Invalid token") ||
+    message.includes("관리자 코드") ||
+    message.includes("사용자를 찾을 수 없습니다")
+  );
 }
 
 export async function GET(req: Request) {
