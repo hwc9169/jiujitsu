@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { compareDateOnly, isTimeRangeValid, isValidDateOnly, isValidTimeOnly, normalizeOptionalText, normalizeTimeOnly } from "@/lib/calendar/utils";
+import {
+  isTimeRangeValid,
+  isValidDateOnly,
+  isValidTimeOnly,
+  normalizeOptionalText,
+  normalizeTimeOnly,
+} from "@/lib/calendar/utils";
 import { getGymIdByUserId, requireUserIdFromAuthHeader } from "@/lib/supabase/gym";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -58,26 +64,16 @@ export async function GET(req: Request) {
     const gymId = await getGymIdByUserId(userId);
     if (!gymId) return NextResponse.json({ error: "No gym" }, { status: 404 });
 
-    const url = new URL(req.url);
-    const includeExpired = url.searchParams.get("includeExpired") === "true";
-    const today = todayDateOnly();
-
     const sb = supabaseServer();
-    let query = sb
+    const { data, error } = await sb
       .from("routines")
-      .select("id, gym_id, program_id, day_of_week, start_time, end_time, capacity, coach_name, effective_from, effective_to, created_at, program:programs(id, name, color, is_active)")
+      .select("id, gym_id, program_id, day_of_week, start_time, end_time, capacity, coach_name, effective_from, created_at, program:programs(id, name, color, is_active)")
       .eq("gym_id", gymId)
       .order("day_of_week", { ascending: true })
       .order("start_time", { ascending: true })
       .order("effective_from", { ascending: true });
 
-    if (!includeExpired) {
-      query = query.or(`effective_to.is.null,effective_to.gte.${today}`);
-    }
-
-    const { data, error } = await query;
     if (error) throw new Error(error.message);
-
     return NextResponse.json({ items: data ?? [] });
   } catch (error: unknown) {
     return NextResponse.json({ error: toErrorMessage(error) }, { status: 500 });
@@ -93,19 +89,19 @@ export async function POST(req: Request) {
     const body = await req.json();
     const programId = typeof body?.program_id === "string" ? body.program_id.trim() : "";
     const dayOfWeek = parseDayOfWeek(body?.day_of_week);
-    const startTime = typeof body?.start_time === "string" && isValidTimeOnly(body.start_time)
-      ? normalizeTimeOnly(body.start_time)
-      : null;
-    const endTime = typeof body?.end_time === "string" && isValidTimeOnly(body.end_time)
-      ? normalizeTimeOnly(body.end_time)
-      : null;
+    const startTime =
+      typeof body?.start_time === "string" && isValidTimeOnly(body.start_time)
+        ? normalizeTimeOnly(body.start_time)
+        : null;
+    const endTime =
+      typeof body?.end_time === "string" && isValidTimeOnly(body.end_time)
+        ? normalizeTimeOnly(body.end_time)
+        : null;
     const coachName = normalizeOptionalText(body?.coach_name);
-    const effectiveFrom = typeof body?.effective_from === "string" && isValidDateOnly(body.effective_from)
-      ? body.effective_from
-      : todayDateOnly();
-    const effectiveTo = body?.effective_to == null || body?.effective_to === ""
-      ? null
-      : (typeof body?.effective_to === "string" && isValidDateOnly(body.effective_to) ? body.effective_to : null);
+    const effectiveFrom =
+      typeof body?.effective_from === "string" && isValidDateOnly(body.effective_from)
+        ? body.effective_from
+        : todayDateOnly();
     const capacityParsed = parseOptionalCapacity(body?.capacity);
 
     if (!programId) return NextResponse.json({ error: "program_id is required" }, { status: 400 });
@@ -114,37 +110,29 @@ export async function POST(req: Request) {
     if (!isTimeRangeValid(startTime, endTime)) {
       return NextResponse.json({ error: "start_time must be before end_time" }, { status: 400 });
     }
-    if (!capacityParsed.ok) return NextResponse.json({ error: "capacity must be a non-negative integer" }, { status: 400 });
-
-    const today = todayDateOnly();
-    if (compareDateOnly(effectiveFrom, today) < 0) {
-      return NextResponse.json({ error: "effective_from cannot be in the past" }, { status: 400 });
-    }
-    if (body?.effective_to != null && body?.effective_to !== "" && !effectiveTo) {
-      return NextResponse.json({ error: "effective_to must be YYYY-MM-DD" }, { status: 400 });
-    }
-    if (effectiveTo && compareDateOnly(effectiveTo, effectiveFrom) < 0) {
-      return NextResponse.json({ error: "effective_to must be >= effective_from" }, { status: 400 });
+    if (!capacityParsed.ok) {
+      return NextResponse.json({ error: "capacity must be a non-negative integer" }, { status: 400 });
     }
 
     const program = await ensureProgramInGym(programId, gymId);
     if (!program) return NextResponse.json({ error: "program not found" }, { status: 404 });
 
     const sb = supabaseServer();
+    const payload = {
+      gym_id: gymId,
+      program_id: programId,
+      day_of_week: dayOfWeek,
+      start_time: startTime,
+      end_time: endTime,
+      capacity: capacityParsed.value,
+      coach_name: coachName,
+      effective_from: effectiveFrom,
+    };
+
     const { data, error } = await sb
       .from("routines")
-      .insert({
-        gym_id: gymId,
-        program_id: programId,
-        day_of_week: dayOfWeek,
-        start_time: startTime,
-        end_time: endTime,
-        capacity: capacityParsed.value,
-        coach_name: coachName,
-        effective_from: effectiveFrom,
-        effective_to: effectiveTo,
-      })
-      .select("id, gym_id, program_id, day_of_week, start_time, end_time, capacity, coach_name, effective_from, effective_to, created_at, program:programs(id, name, color, is_active)")
+      .insert(payload)
+      .select("id, gym_id, program_id, day_of_week, start_time, end_time, capacity, coach_name, effective_from, created_at, program:programs(id, name, color, is_active)")
       .single();
 
     if (error) throw new Error(error.message);
@@ -153,4 +141,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: toErrorMessage(error) }, { status: 500 });
   }
 }
-

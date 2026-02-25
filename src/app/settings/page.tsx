@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AdminShell } from "@/components/admin-shell";
+import { ConsoleShell } from "@/components/console-shell";
 import { apiFetch } from "@/lib/api_client";
 
 type MeResponse = {
@@ -60,10 +60,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <AdminShell
-      title="체육관 설정"
-      subtitle="체육관 정보와 운영 기본값을 확인하는 페이지입니다."
-    >
+    <ConsoleShell>
       {error ? <div className="alert-error">{error}</div> : null}
 
       <section className="panel">
@@ -105,6 +102,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
-    </AdminShell>
+    </ConsoleShell>
   );
 }

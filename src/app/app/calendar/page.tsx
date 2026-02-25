@@ -1,7 +1,7 @@
 "use client";
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AdminShell } from "@/components/admin-shell";
+import { ConsoleShell } from "@/components/console-shell";
 import { apiFetch } from "@/lib/api_client";
 import type { CalendarInstance, Program, Routine } from "@/lib/calendar/types";
 import { compareDateOnly } from "@/lib/calendar/utils";
@@ -42,6 +42,8 @@ type ClassFormState = {
   mode: "create" | "edit";
   schedule_id?: string;
   date: string;
+  action: "ADD" | "MODIFY";
+  routine_id?: string;
   program_id: string;
   start_time: string;
   end_time: string;
@@ -71,14 +73,14 @@ type HolidayFormState = {
 const WEEK_DAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 const PROGRAM_COLOR_OPTIONS = [
   { key: "gray", label: "회색", value: "#6b7280" },
-  { key: "brown", label: "갈색", value: "#8b5a3c" },
-  { key: "orange", label: "주황색", value: "#f97316" },
-  { key: "yellow", label: "노란색", value: "#facc15" },
-  { key: "green", label: "녹색", value: "#16a34a" },
-  { key: "blue", label: "파란색", value: "#3b82f6" },
-  { key: "purple", label: "보라색", value: "#8b5cf6" },
-  { key: "pink", label: "분홍색", value: "#ec4899" },
-  { key: "red", label: "빨간색", value: "#ef4444" },
+  { key: "brown", label: "갈색", value: "#783F04" },
+  { key: "orange", label: "주황색", value: "#E69138" },
+  { key: "yellow", label: "노란색", value: "#F1C232" },
+  { key: "green", label: "녹색", value: "#274E13" },
+  { key: "blue", label: "파란색", value: "#0B5394" },
+  { key: "purple", label: "보라색", value: "#351C75" },
+  { key: "pink", label: "분홍색", value: "#A64D79" },
+  { key: "red", label: "빨간색", value: "#990000" },
 ] as const;
 const PROGRAM_COLOR_SET = new Set(PROGRAM_COLOR_OPTIONS.map((option) => option.value.toLowerCase()));
 const DEFAULT_PROGRAM_COLOR = PROGRAM_COLOR_OPTIONS[4].value;
@@ -130,19 +132,11 @@ function normalizeTime(value: string | null | undefined) {
   return value.slice(0, 5);
 }
 
-function formatTimeRange(startTime: string | null, endTime: string | null) {
-  const start = normalizeTime(startTime);
-  const end = normalizeTime(endTime);
-  if (!start && !end) return "종일";
-  if (start && end) return `${start} - ${end}`;
-  return start || end;
-}
-
 function buildMonthCells(cursor: Date) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const offset = first.getDay();
   const gridStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - offset);
-  return Array.from({ length: 42 }).map((_, index) => {
+  return Array.from({ length: 35 }).map((_, index) => {
     const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
     return {
       date: toDateString(date),
@@ -227,12 +221,20 @@ export default function CalendarPage() {
 
   const monthRange = useMemo(() => getMonthRange(monthCursor), [monthCursor]);
   const cells = useMemo(() => buildMonthCells(monthCursor), [monthCursor]);
+  const visibleRange = useMemo(() => {
+    const first = cells[0]?.date;
+    const last = cells[cells.length - 1]?.date;
+    return {
+      from: first ?? monthRange.from,
+      to: last ?? monthRange.to,
+    };
+  }, [cells, monthRange.from, monthRange.to]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [calendarData, programsData, routinesData] = await Promise.all([
-        apiFetch<CalendarResponse>(`/api/calendar?from=${monthRange.from}&to=${monthRange.to}`),
+        apiFetch<CalendarResponse>(`/api/calendar?from=${visibleRange.from}&to=${visibleRange.to}`),
         apiFetch<ProgramsResponse>("/api/calendar/programs?includeInactive=true"),
         apiFetch<RoutinesResponse>("/api/calendar/routines?includeExpired=false"),
       ]);
@@ -246,17 +248,17 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [monthRange.from, monthRange.to]);
+  }, [visibleRange.from, visibleRange.to]);
 
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
 
   useEffect(() => {
-    if (compareDateOnly(selectedDate, monthRange.from) < 0 || compareDateOnly(selectedDate, monthRange.to) > 0) {
+    if (compareDateOnly(selectedDate, visibleRange.from) < 0 || compareDateOnly(selectedDate, visibleRange.to) > 0) {
       setSelectedDate(monthRange.from);
     }
-  }, [monthRange.from, monthRange.to, selectedDate]);
+  }, [monthRange.from, selectedDate, visibleRange.from, visibleRange.to]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -307,7 +309,7 @@ export default function CalendarPage() {
     const padding = 16;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const modalWidth = Math.min(300, Math.max(280, viewportWidth - padding * 2));
+    const modalWidth = Math.max(180, Math.min(220, viewportWidth - padding * 2));
     const targetLeft = dayAgendaAnchor.right;
 
     const left = Math.min(
@@ -356,6 +358,7 @@ export default function CalendarPage() {
     setClassForm({
       mode: "create",
       date,
+      action: "ADD",
       program_id: defaultProgram,
       start_time: "19:00",
       end_time: "20:00",
@@ -404,18 +407,8 @@ export default function CalendarPage() {
   };
 
   const handleEditInstance = (item: CalendarInstance) => {
-    if (item.source === "ROUTINE" && item.routine_id) {
-      const routine = routines.find((entry) => entry.id === item.routine_id);
-      if (routine) {
-        setDayAgendaOpen(false);
-        openRoutineEdit(routine);
-      }
-      return;
-    }
-
-    if (!item.schedule_id) return;
-
     if (item.kind === "HOLIDAY") {
+      if (!item.schedule_id) return;
       setDayAgendaOpen(false);
       setHolidayForm({
         mode: "edit",
@@ -427,11 +420,14 @@ export default function CalendarPage() {
     }
 
     if (item.program_id) {
+      const isRoutineInstance = !!item.routine_id;
       setDayAgendaOpen(false);
       setClassForm({
-        mode: "edit",
-        schedule_id: item.schedule_id,
+        mode: item.schedule_id ? "edit" : "create",
+        schedule_id: item.schedule_id ?? undefined,
         date: item.date,
+        action: isRoutineInstance ? "MODIFY" : "ADD",
+        routine_id: isRoutineInstance ? item.routine_id ?? undefined : undefined,
         program_id: item.program_id,
         start_time: normalizeTime(item.start_time),
         end_time: normalizeTime(item.end_time),
@@ -441,6 +437,8 @@ export default function CalendarPage() {
       });
       return;
     }
+
+    if (!item.schedule_id) return;
 
     setDayAgendaOpen(false);
     setEventForm({
@@ -461,11 +459,34 @@ export default function CalendarPage() {
 
     try {
       setSaving(true);
-      if (item.source === "ROUTINE" && item.routine_id) {
-        const applyFrom = atLeastToday(item.date);
-        await apiFetch(`/api/calendar/routines/${item.routine_id}?applyFrom=${applyFrom}`, {
-          method: "DELETE",
-        });
+      if (item.routine_id) {
+        if (item.schedule_id) {
+          await apiFetch(`/api/calendar/schedules/${item.schedule_id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              action: "CANCEL",
+              date: item.date,
+              routine_id: item.routine_id,
+              program_id: null,
+              start_time: null,
+              end_time: null,
+              capacity: null,
+              coach_name: null,
+              title: null,
+              location: null,
+              note: null,
+            }),
+          });
+        } else {
+          await apiFetch("/api/calendar/schedules", {
+            method: "POST",
+            body: JSON.stringify({
+              action: "CANCEL",
+              date: item.date,
+              routine_id: item.routine_id,
+            }),
+          });
+        }
       } else if (item.schedule_id) {
         await apiFetch(`/api/calendar/schedules/${item.schedule_id}`, {
           method: "DELETE",
@@ -646,8 +667,13 @@ export default function CalendarPage() {
 
     try {
       setSaving(true);
-      const payload = {
-        action: "ADD",
+      if (classForm.action === "MODIFY" && !classForm.routine_id) {
+        alert("루틴 기반 수업만 날짜별 수정이 가능합니다.");
+        return;
+      }
+
+      const payload: Record<string, unknown> = {
+        action: classForm.action,
         date: classForm.date,
         program_id: classForm.program_id,
         start_time: classForm.start_time,
@@ -656,6 +682,9 @@ export default function CalendarPage() {
         coach_name: classForm.coach_name || null,
         note: classForm.note || null,
       };
+      if (classForm.action === "MODIFY") {
+        payload.routine_id = classForm.routine_id;
+      }
 
       if (classForm.mode === "create") {
         await apiFetch("/api/calendar/schedules", {
@@ -760,10 +789,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <AdminShell
-      title="일정 관리 (베타)"
-      subtitle="월간 캘린더에서 수업, 대회, 휴무를 관리하세요."
-    >
+    <ConsoleShell>
       {error ? <div className="alert-error">{error}</div> : null}
 
       <section className="calendar-layout">
@@ -877,7 +903,7 @@ export default function CalendarPage() {
                                 </span>
                               );
                             }
-                            const chipStyle = { "--calendar-chip-color": item.color ?? "#0e3b2e" } as CSSProperties;
+                            const chipStyle = { "--calendar-chip-color": item.color } as CSSProperties;
                             return (
                               <span key={item.id} className="calendar-chip calendar-chip-class" style={chipStyle}>
                                 {normalizeTime(item.start_time)} {item.program_name ?? item.title ?? "수업"}
@@ -896,12 +922,6 @@ export default function CalendarPage() {
             </>
           ) : (
             <>
-              <div className="panel-header">
-                <h3 className="panel-title">주간 루틴</h3>
-                <button type="button" className="btn btn-primary" onClick={() => openRoutineCreate(1)} disabled={saving}>
-                  + 루틴 추가
-                </button>
-              </div>
               <div className="calendar-routine-shell">
                 <div className="calendar-routine-grid">
                   {WEEK_DAYS.map((dayLabel, index) => (
@@ -919,26 +939,38 @@ export default function CalendarPage() {
                         ) : (
                           routinesByDay[index].map((routine) => {
                             const program = programMap.get(routine.program_id);
+                            const routineColor = normalizeProgramColor(program?.color);
                             return (
-                              <div key={routine.id} className="calendar-routine-item">
-                                <p className="calendar-routine-time">
-                                  {normalizeTime(routine.start_time)} - {normalizeTime(routine.end_time)}
-                                </p>
-                                <p className="calendar-routine-program">{program?.name ?? "프로그램"}</p>
-                                <p className="calendar-routine-meta">
-                                  적용: {routine.effective_from}{routine.effective_to ? ` ~ ${routine.effective_to}` : " ~"}
-                                </p>
-                                <div className="calendar-inline-actions">
-                                  <button type="button" className="btn btn-secondary" onClick={() => openRoutineEdit(routine)}>
-                                    편집
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn btn-danger"
-                                    onClick={() => void handleRoutineDelete(routine)}
-                                  >
-                                    종료
-                                  </button>
+                              <div
+                                key={routine.id}
+                                className="calendar-routine-item"
+                                style={{ "--calendar-item-color": routineColor } as CSSProperties}
+                              >
+                                <div className="calendar-item-line">
+                                  <p className="calendar-item-start">{normalizeTime(routine.start_time)}</p>
+                                  <p className="calendar-item-name">{program?.name ?? "프로그램"}</p>
+                                  <div className="calendar-inline-actions">
+                                    <button
+                                      type="button"
+                                      className="icon-btn"
+                                      data-tooltip="루틴 편집"
+                                      aria-label="루틴 편집"
+                                      title="루틴 편집"
+                                      onClick={() => openRoutineEdit(routine)}
+                                    >
+                                      <MaterialEditIcon />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="icon-btn icon-btn-danger"
+                                      data-tooltip="루틴 종료"
+                                      aria-label="루틴 종료"
+                                      title="루틴 종료"
+                                      onClick={() => void handleRoutineDelete(routine)}
+                                    >
+                                      <MaterialDeleteIcon />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             );
@@ -1117,46 +1149,64 @@ export default function CalendarPage() {
                 <p className="empty-state">등록된 일정이 없습니다.</p>
               ) : (
                 <ul className="calendar-side-list">
-                  {selectedItems.map((item) => (
-                    <li key={item.id} className="calendar-side-item">
-                      <div className="calendar-side-item-main">
-                        <p className="calendar-side-time">{formatTimeRange(item.start_time, item.end_time)}</p>
-                        <p className="calendar-side-title">
-                          {item.kind === "EVENT"
-                            ? `🏆 ${item.title ?? "대회"}`
-                            : item.kind === "HOLIDAY"
-                              ? "휴무"
-                              : item.program_name ?? item.title ?? "수업"}
-                        </p>
-                        {item.coach_name ? <p className="calendar-side-meta">코치: {item.coach_name}</p> : null}
-                      </div>
-                      <div className="calendar-side-actions">
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => handleEditInstance(item)}
-                          disabled={saving}
-                        >
-                          편집
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-danger"
-                          onClick={() => void handleDeleteInstance(item)}
-                          disabled={saving}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                  {selectedItems.map((item) => {
+                    const sideItemColor = item.kind === "HOLIDAY"
+                      ? "#c0392b"
+                      : item.kind === "EVENT"
+                        ? "#f4c430"
+                        : normalizeProgramColor(item.color);
+                    return (
+                      <li
+                        key={item.id}
+                        className="calendar-side-item"
+                        style={{ "--calendar-item-color": sideItemColor } as CSSProperties}
+                      >
+                        <div className="calendar-side-item-main">
+                          <div className="calendar-item-line">
+                            <p className="calendar-item-start">{normalizeTime(item.start_time) || "종일"}</p>
+                            <p className="calendar-item-name">
+                              {item.kind === "EVENT"
+                                ? `🏆 ${item.title ?? "대회"}`
+                                : item.kind === "HOLIDAY"
+                                  ? "휴무"
+                                  : item.program_name ?? item.title ?? "수업"}
+                            </p>
+                            <div className="calendar-inline-actions">
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                data-tooltip="일정 편집"
+                                aria-label="일정 편집"
+                                title="일정 편집"
+                                onClick={() => handleEditInstance(item)}
+                                disabled={saving}
+                              >
+                                <MaterialEditIcon />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-btn icon-btn-danger"
+                                data-tooltip="일정 삭제"
+                                aria-label="일정 삭제"
+                                title="일정 삭제"
+                                onClick={() => void handleDeleteInstance(item)}
+                                disabled={saving}
+                              >
+                                <MaterialDeleteIcon />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               <div className="modal-footer calendar-day-dialog-footer">
                 <button
                   type="button"
                   className="btn btn-primary calendar-day-dialog-add-btn"
-                  onClick={() => openClassCreate(atLeastToday(selectedDate))}
+                  onClick={() => openClassCreate(selectedDate)}
                   disabled={saving}
                 >
                   일정 추가
@@ -1174,9 +1224,9 @@ export default function CalendarPage() {
               <h3 className="modal-title">일정 추가</h3>
             </div>
             <div className="modal-body">
-              <p className="panel-subhead">선택 날짜: {atLeastToday(selectedDate)}</p>
+              <p className="panel-subhead">선택 날짜: {selectedDate}</p>
               <div className="field-grid">
-                <button type="button" className="btn btn-primary" onClick={() => openClassCreate(atLeastToday(selectedDate))}>
+                <button type="button" className="btn btn-primary" onClick={() => openClassCreate(selectedDate)}>
                   일정 추가
                 </button>
               </div>
@@ -1299,8 +1349,8 @@ export default function CalendarPage() {
                 <input
                   className="input"
                   type="date"
-                  min={todayDateOnly()}
                   value={classForm.date}
+                  disabled={classForm.action === "MODIFY"}
                   onChange={(event) => setClassForm((prev) => (prev ? { ...prev, date: event.target.value } : prev))}
                 />
               </label>
@@ -1502,6 +1552,6 @@ export default function CalendarPage() {
           </div>
         </div>
       ) : null}
-    </AdminShell>
+    </ConsoleShell>
   );
 }

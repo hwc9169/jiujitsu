@@ -11,12 +11,9 @@ type MeResponse = {
   gymName: string | null;
 };
 
-type AdminShellProps = {
-  title: string;
-  subtitle?: string;
+type ConsoleShellProps = {
   actions?: ReactNode;
   children: ReactNode;
-  mobileTitleOnly?: boolean;
 };
 
 const MAIN_NAV = [
@@ -33,7 +30,7 @@ const MOBILE_MENU_ITEMS: Array<{ href: string; label: string; disabled?: boolean
   { href: "", label: "문자 로그", disabled: true },
 ];
 
-export function AdminShell({ title, subtitle, actions, children, mobileTitleOnly = false }: AdminShellProps) {
+export function ConsoleShell({ actions, children }: ConsoleShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [gymName, setGymName] = useState("도장 정보 불러오는 중...");
@@ -237,8 +234,8 @@ export function AdminShell({ title, subtitle, actions, children, mobileTitleOnly
       </aside>
 
       <main className="admin-main">
-        <header className={`admin-topbar ${mobileTitleOnly ? "admin-topbar-mobile-plain" : ""}`}>
-          <div className="topbar-heading">
+        <header className="admin-topbar admin-topbar-plain-shell">
+          <div className="topbar-heading topbar-heading-compact">
             <button
               type="button"
               className="mobile-menu-trigger"
@@ -251,12 +248,6 @@ export function AdminShell({ title, subtitle, actions, children, mobileTitleOnly
               <span />
               <span />
             </button>
-            <div>
-              <h1 className="page-title">{title}</h1>
-              {subtitle ? (
-                <p className={`page-subtitle ${mobileTitleOnly ? "mobile-subtitle-hidden" : ""}`}>{subtitle}</p>
-              ) : null}
-            </div>
           </div>
           {actions ? <div className="topbar-actions">{actions}</div> : null}
         </header>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AdminShell } from "@/components/admin-shell";
+import { ConsoleShell } from "@/components/console-shell";
 import { apiFetch } from "@/lib/api_client";
 
 type DailySalesPoint = {
@@ -160,11 +160,7 @@ export default function DashboardPage() {
   })();
 
   return (
-    <AdminShell
-      title="운영 대시보드"
-      subtitle="월매출과 일별 매출 흐름을 확인하세요."
-      mobileTitleOnly
-    >
+    <ConsoleShell>
       {error ? <div className="alert-error">{error}</div> : null}
 
       <div className="kpi-grid">
@@ -331,6 +327,6 @@ export default function DashboardPage() {
           </button>
         </div>
       </section>
-    </AdminShell>
+    </ConsoleShell>
   );
 }

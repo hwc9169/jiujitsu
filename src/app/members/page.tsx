@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AdminShell } from "@/components/admin-shell";
+import { ConsoleShell } from "@/components/console-shell";
 import { apiFetch } from "@/lib/api_client";
 import type { Member, MemberBelt, MemberBeltGral, MemberGender, MemberStatus, MembershipState } from "@/lib/types";
 
@@ -315,16 +315,7 @@ export default function MembersPage() {
   };
 
   return (
-    <AdminShell
-      title="회원 관리"
-      subtitle="활성/미납/탈퇴(비활성) 회원을 필터로 관리하세요."
-      mobileTitleOnly
-      actions={
-        <button type="button" className="btn btn-accent desktop-only-action" onClick={openCreate}>
-          + 회원 추가
-        </button>
-      }
-    >
+    <ConsoleShell>
       <section className="panel">
         <div className="members-toolbar">
           <div className="tab-group">
@@ -360,9 +351,14 @@ export default function MembersPage() {
         </div>
 
         <div className="panel-subhead">
-          <div>{loading ? "회원 목록 불러오는 중..." : `총 ${count}명`}</div>
           <div>
-            {page} / {totalPages} 페이지
+            <span>{page} / {totalPages} 페이지</span>
+            <div>{loading ? "회원 목록 불러오는 중..." : `총 ${count}명`}</div>
+          </div>
+          <div className="members-subhead-actions">
+            <button type="button" className="btn btn-accent" onClick={openCreate}>
+              + 회원 추가
+            </button>
           </div>
         </div>
 
@@ -534,7 +530,7 @@ export default function MembersPage() {
           onSaved={onSaved}
         />
       )}
-    </AdminShell>
+    </ConsoleShell>
   );
 }
 

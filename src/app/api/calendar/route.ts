@@ -6,7 +6,6 @@ import {
   dayOfWeekFromDateString,
   eachDateBetween,
   isValidDateOnly,
-  isWithinDateRange,
   normalizeOptionalText,
 } from "@/lib/calendar/utils";
 
@@ -27,7 +26,6 @@ type RoutineRow = {
   capacity: number | null;
   coach_name: string | null;
   effective_from: string;
-  effective_to: string | null;
 };
 
 type ScheduleAction = "CANCEL" | "MODIFY" | "ADD";
@@ -209,7 +207,20 @@ export async function GET(req: Request) {
     const { from, to } = parseRange(url.searchParams);
 
     const sb = supabaseServer();
-    const [programsResult, routinesResult, schedulesResult] = await Promise.all([
+    const fetchRoutines = async () => {
+      const result = await sb
+        .from("routines")
+        .select("id, gym_id, program_id, day_of_week, start_time, end_time, capacity, coach_name, effective_from")
+        .eq("gym_id", gymId)
+        .lte("effective_from", to)
+        .order("day_of_week", { ascending: true })
+        .order("start_time", { ascending: true });
+
+      if (result.error) throw new Error(result.error.message);
+      return (result.data ?? []) as RoutineRow[];
+    };
+
+    const [programsResult, schedulesResult, routines] = await Promise.all([
       sb
         .from("programs")
         .select("id, name, color, is_active")
@@ -217,28 +228,19 @@ export async function GET(req: Request) {
         .order("is_active", { ascending: false })
         .order("name", { ascending: true }),
       sb
-        .from("routines")
-        .select("id, gym_id, program_id, day_of_week, start_time, end_time, capacity, coach_name, effective_from, effective_to")
-        .eq("gym_id", gymId)
-        .lte("effective_from", to)
-        .or(`effective_to.is.null,effective_to.gte.${from}`)
-        .order("day_of_week", { ascending: true })
-        .order("start_time", { ascending: true }),
-      sb
         .from("schedules")
         .select("id, gym_id, date, routine_id, action, program_id, start_time, end_time, capacity, coach_name, title, location, note, created_at")
         .eq("gym_id", gymId)
         .gte("date", from)
         .lte("date", to)
         .order("created_at", { ascending: true }),
+      fetchRoutines(),
     ]);
 
     if (programsResult.error) throw new Error(programsResult.error.message);
-    if (routinesResult.error) throw new Error(routinesResult.error.message);
     if (schedulesResult.error) throw new Error(schedulesResult.error.message);
 
     const programs = (programsResult.data ?? []) as ProgramRow[];
-    const routines = (routinesResult.data ?? []) as RoutineRow[];
     const schedules = (schedulesResult.data ?? []) as ScheduleRow[];
     const programMap = new Map(programs.map((program) => [program.id, program]));
 
@@ -251,7 +253,7 @@ export async function GET(req: Request) {
 
       for (const routine of routines) {
         if (routine.day_of_week !== dayOfWeek) continue;
-        if (!isWithinDateRange(date, routine.effective_from, routine.effective_to)) continue;
+        if (compareDateOnly(date, routine.effective_from) < 0) continue;
         const program = programMap.get(routine.program_id) ?? null;
         instances.set(routineKey(routine.id, date), buildRoutineInstance(date, routine, program));
       }

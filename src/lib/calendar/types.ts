@@ -19,7 +19,6 @@ export type Routine = {
   capacity: number | null;
   coach_name: string | null;
   effective_from: string;
-  effective_to: string | null;
   created_at: string;
   program: Pick<Program, "id" | "name" | "color" | "is_active"> | null;
 };
