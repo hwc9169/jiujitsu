@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { requireUserIdFromAuthHeader, getGymIdByUserId } from "@/lib/supabase/gym";
 
 type DashboardCounts = {
+  total_member_count?: number;
   overdue_count: number;
   expiring_7d_count: number;
   new_this_month: number;
@@ -114,6 +115,14 @@ function shiftMonth(base: MonthRef, delta: number) {
   } satisfies MonthRef;
 }
 
+function durationMonths(startDateRaw: string, expireDateRaw: string) {
+  const start = parseDateOnly(startDateRaw);
+  const end = parseDateOnly(expireDateRaw);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 1;
+  const diff = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  return Math.max(1, diff);
+}
+
 function getDailySeries(year: number, month: number) {
   const days = new Date(year, month, 0).getDate();
   const points: DailySalesPoint[] = [];
@@ -174,7 +183,7 @@ export async function GET(req: Request) {
       const startParts = parseDateParts(startSource);
       if (!startParts) continue;
 
-      const estimatedSales = unitPrice;
+      const estimatedSales = durationMonths(startSource, member.expire_date) * unitPrice;
       const key = monthKeyFromParts(startParts.year, startParts.month);
       const monthBucket = monthlyMap.get(key) ?? { estimated_sales: 0, member_count: 0 };
       monthBucket.member_count += 1;
@@ -193,9 +202,11 @@ export async function GET(req: Request) {
     const selectedMonthSales = dailySales.reduce((sum, point) => sum + point.estimated_sales, 0);
     const currentMonthSales = monthlyMap.get(currentMonth.key)?.estimated_sales ?? 0;
     const previousMonthSales = monthlyMap.get(previousMonth.key)?.estimated_sales ?? 0;
+    const totalMemberCount = (membersData ?? []).length;
 
     return NextResponse.json({
       ...(data as DashboardCounts),
+      total_member_count: totalMemberCount,
       unit_price: unitPrice,
       selected_month: selectedMonth.key,
       selected_month_label: selectedMonth.label,

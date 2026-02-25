@@ -13,6 +13,7 @@ type DailySalesPoint = {
 };
 
 type Dashboard = {
+  total_member_count: number;
   overdue_count: number;
   expiring_7d_count: number;
   new_this_month: number;
@@ -123,6 +124,7 @@ export default function DashboardPage() {
   const overdueCount = data?.overdue_count ?? 0;
   const expiringCount = data?.expiring_7d_count ?? 0;
   const newThisMonth = data?.new_this_month ?? 0;
+  const totalMemberCount = data?.total_member_count ?? 0;
   const selectedMonthKey = data?.selected_month ?? selectedMonth;
   const dailySales = data?.daily_sales ?? EMPTY_DAILY_SALES;
   const selectedMonthSales = data?.selected_month_sales ?? 0;
@@ -161,10 +163,19 @@ export default function DashboardPage() {
     <AdminShell
       title="운영 대시보드"
       subtitle="월매출과 일별 매출 흐름을 확인하세요."
+      mobileTitleOnly
     >
       {error ? <div className="alert-error">{error}</div> : null}
 
       <div className="kpi-grid">
+        <article className="kpi-card total">
+          <p className="kpi-label">전체 회원수</p>
+          <p className="kpi-value">
+            {loading ? "-" : totalMemberCount.toLocaleString("ko-KR")}
+          </p>
+          <p className="kpi-help">탈퇴 제외 전체 회원</p>
+        </article>
+
         <article className="kpi-card overdue">
           <p className="kpi-label">미납 회원</p>
           <p className="kpi-value">

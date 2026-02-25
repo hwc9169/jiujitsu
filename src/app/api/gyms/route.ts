@@ -3,6 +3,12 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireUserIdFromAuthHeader, getGymIdByUserId } from "@/lib/supabase/gym";
 
+const DEFAULT_PROGRAMS = [
+  { name: "기 수업", color: "#0e3b2e" },
+  { name: "노기 수업", color: "#1f4d3d" },
+  { name: "오픈매트", color: "#7a8b83" },
+] as const;
+
 export async function POST(req: Request) {
   try {
     const userId = await requireUserIdFromAuthHeader(req);
@@ -38,8 +44,22 @@ export async function POST(req: Request) {
     const { error: seedErr } = await sb.rpc("seed_default_templates", { p_gym_id: gym.id });
     if (seedErr) throw new Error(seedErr.message);
 
+    // 4) seed default programs
+    const { error: programErr } = await sb.from("programs").insert(
+      DEFAULT_PROGRAMS.map((program) => ({
+        gym_id: gym.id,
+        name: program.name,
+        color: program.color,
+        is_active: true,
+      })),
+    );
+    if (programErr) throw new Error(programErr.message);
+
     return NextResponse.json({ gym });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to create gym" },
+      { status: 500 },
+    );
   }
 }

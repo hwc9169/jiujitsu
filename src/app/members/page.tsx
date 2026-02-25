@@ -318,8 +318,9 @@ export default function MembersPage() {
     <AdminShell
       title="회원 관리"
       subtitle="활성/미납/탈퇴(비활성) 회원을 필터로 관리하세요."
+      mobileTitleOnly
       actions={
-        <button type="button" className="btn btn-accent" onClick={openCreate}>
+        <button type="button" className="btn btn-accent desktop-only-action" onClick={openCreate}>
           + 회원 추가
         </button>
       }
@@ -518,6 +519,10 @@ export default function MembersPage() {
           다음
         </button>
       </div>
+
+      <button type="button" className="mobile-fab" onClick={openCreate} aria-label="회원 추가">
+        +
+      </button>
 
       {modalOpen && (
         <MemberModal
