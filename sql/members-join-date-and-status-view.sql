@@ -11,7 +11,8 @@ alter table public.members
   alter column join_date set default current_date,
   alter column join_date set not null;
 
-create or replace view public.v_members_with_status as
+drop view if exists public.v_members_with_status;
+create view public.v_members_with_status as
 select
   m.id,
   m.gym_id,
@@ -38,3 +39,5 @@ select
   end as status
 from public.members m;
 
+alter view public.v_members_with_status
+set (security_invoker = true);

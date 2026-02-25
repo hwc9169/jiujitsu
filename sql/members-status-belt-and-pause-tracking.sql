@@ -56,7 +56,8 @@ alter table public.members
   add constraint members_belt_gral_check
   check (belt_gral between 0 and 4);
 
-create or replace view public.v_members_with_status as
+drop view if exists public.v_members_with_status;
+create view public.v_members_with_status as
 select
   m.id,
   m.gym_id,

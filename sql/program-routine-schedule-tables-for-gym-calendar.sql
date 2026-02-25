@@ -22,7 +22,6 @@ create table if not exists public.routines (
   capacity integer null,
   coach_name text null,
   effective_from date not null default current_date,
-  effective_to date null,
   created_at timestamptz not null default now()
 );
 
@@ -144,4 +143,3 @@ grant select, insert, update, delete on table public.schedules to service_role;
 alter table public.programs enable row level security;
 alter table public.routines enable row level security;
 alter table public.schedules enable row level security;
-

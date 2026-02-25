@@ -1,5 +1,6 @@
 // app/api/gyms/route.ts
 import { NextResponse } from "next/server";
+import { generateUniqueScheduleSlug } from "@/lib/public-schedule";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireUserIdFromAuthHeader, getGymIdByUserId } from "@/lib/supabase/gym";
 
@@ -19,6 +20,7 @@ export async function POST(req: Request) {
     }
 
     const sb = supabaseServer();
+    const publicScheduleSlug = await generateUniqueScheduleSlug(name);
 
     // 이미 gym이 있으면 재생성 막기(원하면 허용 가능)
     const existingGymId = await getGymIdByUserId(userId);
@@ -29,7 +31,11 @@ export async function POST(req: Request) {
     // 1) gyms insert
     const { data: gym, error: gymErr } = await sb
       .from("gyms")
-      .insert({ name })
+      .insert({
+        name,
+        public_schedule_enabled: false,
+        public_schedule_slug: publicScheduleSlug,
+      })
       .select("id, name, created_at")
       .single();
     if (gymErr) throw new Error(gymErr.message);

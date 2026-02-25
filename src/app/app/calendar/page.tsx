@@ -24,6 +24,17 @@ type RoutinesResponse = {
   items: Routine[];
 };
 
+type PublicScheduleSettings = {
+  enabled: boolean;
+  slug: string | null;
+  shareUrl: string | null;
+  accessCodeEnabled: boolean;
+};
+
+type PublicScheduleSettingsResponse = {
+  settings: PublicScheduleSettings;
+};
+
 type ProgramFormState = {
   name: string;
   color: string;
@@ -203,6 +214,14 @@ function MaterialPaletteIcon() {
   );
 }
 
+function MaterialShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 16.08a2.9 2.9 0 0 0-1.96.77l-7.13-4.15a3.2 3.2 0 0 0 0-1.39l7.05-4.11a2.99 2.99 0 1 0-.96-1.63L7.95 9.68a3 3 0 1 0 0 4.64l7.05 4.11a3 3 0 1 0 3-2.35Z" />
+    </svg>
+  );
+}
+
 export default function CalendarPage() {
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(todayDateOnly());
@@ -233,6 +252,8 @@ export default function CalendarPage() {
   const [programColorListId, setProgramColorListId] = useState<string | null>(null);
   const [editingProgramId, setEditingProgramId] = useState<string | null>(null);
   const [editingProgramName, setEditingProgramName] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
 
   const monthRange = useMemo(() => getMonthRange(monthCursor), [monthCursor]);
   const cells = useMemo(() => buildMonthCells(monthCursor), [monthCursor]);
@@ -286,6 +307,16 @@ export default function CalendarPage() {
     window.addEventListener("pointerdown", handlePointerDown);
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, []);
+
+  useEffect(() => {
+    if (!shareStatus) return;
+    const timeoutId = window.setTimeout(() => {
+      setShareStatus(null);
+    }, 2200);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [shareStatus]);
 
   const instanceMap = useMemo(() => {
     const map = new Map<string, CalendarInstance[]>();
@@ -803,6 +834,36 @@ export default function CalendarPage() {
     }
   };
 
+  const handleSharePublicSchedule = async () => {
+    try {
+      setShareBusy(true);
+      setShareStatus(null);
+
+      const fetched = await apiFetch<PublicScheduleSettingsResponse>("/api/public-schedule");
+      let nextSettings = fetched.settings;
+
+      if (!nextSettings.enabled) {
+        const enabledResponse = await apiFetch<PublicScheduleSettingsResponse>("/api/public-schedule", {
+          method: "PATCH",
+          body: JSON.stringify({ enabled: true }),
+        });
+        nextSettings = enabledResponse.settings;
+      }
+
+      if (!nextSettings.shareUrl) {
+        throw new Error("공유 링크를 생성하지 못했습니다.");
+      }
+
+      await navigator.clipboard.writeText(nextSettings.shareUrl);
+      setShareStatus("링크 복사됨");
+      setError(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "공유 링크 복사에 실패했습니다.");
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
   return (
     <ConsoleShell>
       {error ? <div className="alert-error">{error}</div> : null}
@@ -864,6 +925,23 @@ export default function CalendarPage() {
                     >
                       &gt;
                     </button>
+                  </div>
+
+                  <div className="calendar-month-toolbar-right">
+                    <button
+                      type="button"
+                      className="calendar-share-btn"
+                      data-tooltip="공개 시간표 공유 링크 복사"
+                      aria-label="공개 시간표 공유 링크 복사"
+                      title="공개 시간표 공유 링크 복사"
+                      onClick={() => {
+                        void handleSharePublicSchedule();
+                      }}
+                      disabled={shareBusy}
+                    >
+                      <MaterialShareIcon />
+                    </button>
+                    {shareStatus ? <span className="calendar-share-status">{shareStatus}</span> : null}
                   </div>
                 </div>
               </div>

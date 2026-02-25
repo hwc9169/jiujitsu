@@ -1537,6 +1537,14 @@ textarea {
   gap: 8px;
 }
 
+.calendar-month-toolbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  justify-content: flex-end;
+}
+
 .calendar-month-title {
   min-width: 120px;
   text-align: center;
@@ -1547,10 +1555,67 @@ textarea {
 }
 
 .calendar-nav-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border-radius: 999px;
+}
+
+.calendar-nav-btn svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.calendar-share-btn {
   width: 34px;
   height: 34px;
-  padding: 7px 0;
+  border: 0;
   border-radius: 999px;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 62%, var(--muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.calendar-share-btn:hover {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+}
+
+.calendar-share-btn:active {
+  transform: translateY(1px);
+}
+
+.calendar-share-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 58%, transparent);
+  outline-offset: 2px;
+}
+
+.calendar-share-btn svg {
+  width: 19px;
+  height: 19px;
+  fill: currentColor;
+}
+
+.calendar-share-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.calendar-share-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--success);
+  white-space: nowrap;
 }
 
 .calendar-grid-shell {
@@ -1680,10 +1745,14 @@ textarea {
 .calendar-chip {
   border: 1px solid color-mix(in srgb, var(--line) 90%, transparent);
   border-radius: 6px;
-  padding: 2px 6px;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 18px;
+  padding: 0 6px;
   font-size: 10px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

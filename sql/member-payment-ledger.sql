@@ -62,6 +62,7 @@ create index if not exists idx_payments_member_date on public.payments(gym_id, m
 create or replace function public.set_payments_updated_at()
 returns trigger
 language plpgsql
+SET search_path = public
 as $$
 begin
   new.updated_at = now();
