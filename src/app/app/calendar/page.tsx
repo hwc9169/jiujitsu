@@ -145,7 +145,7 @@ function buildMonthCells(cursor: Date) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const offset = (first.getDay() + 6) % 7;
   const gridStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - offset);
-  return Array.from({ length: 35 }).map((_, index) => {
+  return Array.from({ length: 42 }).map((_, index) => {
     const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
     return {
       date: toDateString(date),

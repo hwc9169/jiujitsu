@@ -438,11 +438,13 @@ textarea {
 
 .sales-line-chart-wrap {
   padding: 14px 16px 16px;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .sales-line-chart {
   display: block;
+  width: 100%;
+  max-width: 100%;
 }
 
 .sales-grid-line {
@@ -1503,7 +1505,7 @@ textarea {
   grid-template-columns: minmax(0, 1fr) 228px;
   gap: 16px;
   align-items: stretch;
-  height: calc(100dvh - 196px);
+  height: calc(100dvh - 120px);
   min-height: 0;
 }
 
@@ -2000,7 +2002,7 @@ textarea {
   }
 
   .calendar-main-panel {
-    height: calc(100dvh - 196px);
+    height: calc(100dvh - 120px);
     min-height: 0;
   }
 

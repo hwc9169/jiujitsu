@@ -212,7 +212,7 @@ export default function DashboardPage() {
           <svg
             viewBox={`0 0 ${chartGeometry.width} ${chartGeometry.height}`}
             className="sales-line-chart"
-            style={{ width: `${chartGeometry.width}px`, height: `${chartGeometry.height}px` }}
+            style={{ width: "100%", height: `${chartGeometry.height}px` }}
             role="img"
             aria-label={`${monthLabelFromKey(selectedMonthKey)} 일별 매출 라인 차트`}
             preserveAspectRatio="none"
