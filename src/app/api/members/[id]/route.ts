@@ -86,6 +86,12 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     if ("join_date" in patch) {
       return NextResponse.json({ error: "join_date cannot be updated" }, { status: 400 });
     }
+    if ("start_date" in patch || "expire_date" in patch) {
+      return NextResponse.json(
+        { error: "start_date/expire_date can only be changed via payment management" },
+        { status: 400 },
+      );
+    }
 
     const sb = supabaseServer();
 
@@ -155,7 +161,7 @@ export async function PATCH(req: Request, { params }: RouteContext) {
 
     // 허용 필드만
     const allowed: Record<string, unknown> = {};
-    for (const k of ["name", "phone", "gender", "belt", "belt_gral", "birth_date", "start_date", "expire_date", "memo"]) {
+    for (const k of ["name", "phone", "gender", "belt", "belt_gral", "birth_date", "memo"]) {
       if (k in patch) allowed[k] = patch[k];
     }
     if ("phone" in allowed) allowed.phone = normalizePhone(allowed.phone);
@@ -195,25 +201,6 @@ export async function PATCH(req: Request, { params }: RouteContext) {
         allowed.birth_date = normalizedBirthDate;
       }
     }
-    if ("start_date" in allowed) {
-      if (allowed.start_date == null || allowed.start_date === "") {
-        allowed.start_date = null;
-      } else {
-        const normalizedStartDate = normalizeDate(allowed.start_date);
-        if (!normalizedStartDate) {
-          return NextResponse.json({ error: "start_date must be YYYY-MM-DD" }, { status: 400 });
-        }
-        allowed.start_date = normalizedStartDate;
-      }
-    }
-    if ("expire_date" in allowed) {
-      const normalizedExpireDate = normalizeDate(allowed.expire_date);
-      if (!normalizedExpireDate) {
-        return NextResponse.json({ error: "expire_date must be YYYY-MM-DD" }, { status: 400 });
-      }
-      allowed.expire_date = normalizedExpireDate;
-    }
-
     const { data, error } = await sb
       .from("members")
       .update(allowed)

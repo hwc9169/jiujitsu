@@ -17,14 +17,11 @@ type Dashboard = {
   overdue_count: number;
   expiring_7d_count: number;
   new_this_month: number;
-  unit_price: number;
   selected_month: string;
   daily_sales: DailySalesPoint[];
   selected_month_sales: number;
 };
 
-const DEFAULT_UNIT_PRICE = 150000;
-const STORAGE_UNIT_PRICE_KEY = "jjt_unit_price";
 const EMPTY_DAILY_SALES: DailySalesPoint[] = [];
 
 function formatKRW(value: number) {
@@ -87,30 +84,10 @@ export default function DashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [unitPrice, setUnitPrice] = useState(DEFAULT_UNIT_PRICE);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(STORAGE_UNIT_PRICE_KEY);
-    const parsed = Number(stored);
-    if (!Number.isFinite(parsed) || parsed <= 0) return;
-
-    const rounded = Math.round(parsed);
-    if (rounded === DEFAULT_UNIT_PRICE) return;
-
-    const rafId = window.requestAnimationFrame(() => {
-      setLoading(true);
-      setUnitPrice(rounded);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(rafId);
-    };
-  }, []);
-
-  useEffect(() => {
-    apiFetch<Dashboard>(`/api/dashboard?unitPrice=${unitPrice}&month=${selectedMonth}`)
+    apiFetch<Dashboard>(`/api/dashboard?month=${selectedMonth}`)
       .then((res) => {
         setData(res);
         setError(null);
@@ -119,7 +96,7 @@ export default function DashboardPage() {
         setError(e instanceof Error ? e.message : "대시보드를 불러오지 못했습니다.");
       })
       .finally(() => setLoading(false));
-  }, [unitPrice, selectedMonth]);
+  }, [selectedMonth]);
 
   const overdueCount = data?.overdue_count ?? 0;
   const expiringCount = data?.expiring_7d_count ?? 0;

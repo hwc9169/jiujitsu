@@ -26,3 +26,17 @@ export type Member = {
   deleted_at: string | null;
   status?: MemberStatus | "DELETED";
 };
+
+export type MemberPayment = {
+  id: string;
+  gym_id: string;
+  member_id: string;
+  payment_date: string;
+  start_date: string;
+  expire_date: string;
+  months: number;
+  amount: number;
+  memo: string | null;
+  created_at: string;
+  updated_at: string;
+};

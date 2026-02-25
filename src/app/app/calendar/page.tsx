@@ -70,7 +70,16 @@ type HolidayFormState = {
   end_date: string;
 };
 
-const WEEK_DAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+const DAY_LABEL_BY_INDEX = ["일", "월", "화", "수", "목", "금", "토"] as const;
+const WEEK_DAYS_MONDAY_FIRST = [
+  { dayOfWeek: 1, label: "월" },
+  { dayOfWeek: 2, label: "화" },
+  { dayOfWeek: 3, label: "수" },
+  { dayOfWeek: 4, label: "목" },
+  { dayOfWeek: 5, label: "금" },
+  { dayOfWeek: 6, label: "토" },
+  { dayOfWeek: 0, label: "일" },
+] as const;
 const PROGRAM_COLOR_OPTIONS = [
   { key: "gray", label: "회색", value: "#6b7280" },
   { key: "brown", label: "갈색", value: "#783F04" },
@@ -134,7 +143,7 @@ function normalizeTime(value: string | null | undefined) {
 
 function buildMonthCells(cursor: Date) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const offset = first.getDay();
+  const offset = (first.getDay() + 6) % 7;
   const gridStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - offset);
   return Array.from({ length: 35 }).map((_, index) => {
     const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
@@ -152,7 +161,13 @@ function atLeastToday(date: string) {
 }
 
 function dayName(dayOfWeek: number) {
-  return WEEK_DAYS[dayOfWeek] ?? "?";
+  return DAY_LABEL_BY_INDEX[dayOfWeek] ?? "?";
+}
+
+function dayOfWeekFromDate(dateString: string) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  return date.getDay();
 }
 
 function MaterialEditIcon() {
@@ -855,9 +870,12 @@ export default function CalendarPage() {
 
               <div className="calendar-grid-shell">
                 <div className="calendar-grid-head">
-                  {WEEK_DAYS.map((dayLabel, index) => (
-                    <div key={dayLabel} className={`calendar-grid-weekday ${index === 0 ? "sun" : ""} ${index === 6 ? "sat" : ""}`}>
-                      {dayLabel}
+                  {WEEK_DAYS_MONDAY_FIRST.map((day) => (
+                    <div
+                      key={day.dayOfWeek}
+                      className={`calendar-grid-weekday ${day.dayOfWeek === 0 ? "sun" : ""} ${day.dayOfWeek === 6 ? "sat" : ""}`}
+                    >
+                      {day.label}
                     </div>
                   ))}
                 </div>
@@ -867,6 +885,8 @@ export default function CalendarPage() {
                     const items = instanceMap.get(cell.date) ?? [];
                     const active = cell.date === selectedDate;
                     const isToday = cell.date === todayDateOnly();
+                    const cellDayOfWeek = dayOfWeekFromDate(cell.date);
+                    const isWeekend = cellDayOfWeek === 0 || cellDayOfWeek === 6;
                     return (
                       <button
                         type="button"
@@ -884,7 +904,9 @@ export default function CalendarPage() {
                         }}
                       >
                         <div className="calendar-cell-head">
-                          <span className={`calendar-cell-day ${isToday ? "today" : ""}`}>{cell.day}</span>
+                          <span className={`calendar-cell-day ${isToday ? "today" : ""} ${isWeekend ? "weekend" : ""}`}>
+                            {cell.day}
+                          </span>
                         </div>
 
                         <div className="calendar-cell-events">
@@ -924,20 +946,24 @@ export default function CalendarPage() {
             <>
               <div className="calendar-routine-shell">
                 <div className="calendar-routine-grid">
-                  {WEEK_DAYS.map((dayLabel, index) => (
-                    <article key={dayLabel} className="calendar-routine-day">
+                  {WEEK_DAYS_MONDAY_FIRST.map((day) => (
+                    <article key={day.dayOfWeek} className="calendar-routine-day">
                       <div className="calendar-routine-day-head">
-                        <h5>{dayLabel}</h5>
-                        <button type="button" className="btn btn-secondary" onClick={() => openRoutineCreate(index)}>
+                        <h5>{day.label}</h5>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => openRoutineCreate(day.dayOfWeek)}
+                        >
                           + 추가
                         </button>
                       </div>
 
                       <div className="calendar-routine-day-list">
-                        {routinesByDay[index].length === 0 ? (
+                        {routinesByDay[day.dayOfWeek].length === 0 ? (
                           <p className="empty-state">반복 수업 없음</p>
                         ) : (
-                          routinesByDay[index].map((routine) => {
+                          routinesByDay[day.dayOfWeek].map((routine) => {
                             const program = programMap.get(routine.program_id);
                             const routineColor = normalizeProgramColor(program?.color);
                             return (

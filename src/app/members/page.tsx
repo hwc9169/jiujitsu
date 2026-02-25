@@ -3,13 +3,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConsoleShell } from "@/components/console-shell";
 import { apiFetch } from "@/lib/api_client";
-import type { Member, MemberBelt, MemberBeltGral, MemberGender, MemberStatus, MembershipState } from "@/lib/types";
+import type {
+  Member,
+  MemberBelt,
+  MemberBeltGral,
+  MemberGender,
+  MemberPayment,
+  MemberStatus,
+  MembershipState,
+} from "@/lib/types";
 
 type MembersResponse = {
   items: Member[];
   count: number;
   page: number;
   pageSize: number;
+};
+
+type MemberMutationResponse = {
+  member: Member;
+};
+
+type PaymentsResponse = {
+  items: MemberPayment[];
+};
+
+type PaymentMutationResponse = {
+  payment: MemberPayment;
 };
 
 type FilterStatus = MemberStatus | "INACTIVE" | "ALL";
@@ -49,6 +69,8 @@ const REGISTRATION_PLANS = [
   { value: "6", label: "6개월" },
   { value: "12", label: "12개월" },
 ] as const;
+const DEFAULT_UNIT_PRICE = 150000;
+const STORAGE_UNIT_PRICE_KEY = "jjt_unit_price";
 
 type RegistrationPlanValue = (typeof REGISTRATION_PLANS)[number]["value"];
 
@@ -149,6 +171,10 @@ function formatPhoneDisplay(phone: string) {
   return phone;
 }
 
+function formatKRW(value: number) {
+  return `${Math.max(0, value).toLocaleString("ko-KR")}원`;
+}
+
 function calculateAge(birthDate?: string | null): number | null {
   if (!birthDate) return null;
   const [year, month, day] = birthDate.split("-").map(Number);
@@ -176,6 +202,14 @@ function MaterialEditIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 17.25V21h3.75l11.06-11.06-3.75-3.75L3 17.25Z" />
       <path d="M20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z" />
+    </svg>
+  );
+}
+
+function MaterialPaymentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 5h18v14H3V5Zm2 2v2h14V7H5Zm0 4v6h14v-6H5Zm2 1h5v4H7v-4Z" />
     </svg>
   );
 }
@@ -227,6 +261,7 @@ export default function MembersPage() {
   // modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [paymentMember, setPaymentMember] = useState<Member | null>(null);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(count / pageSize)), [count]);
 
@@ -266,6 +301,10 @@ export default function MembersPage() {
     setModalOpen(true);
   };
 
+  const openPayment = (m: Member) => {
+    setPaymentMember(m);
+  };
+
   const onDeactivateMember = async (m: Member) => {
     if (!confirm(`${m.name} 회원을 탈퇴 처리할까요? (비활성화)`)) return;
     await apiFetch(`/api/members/${m.id}`, { method: "DELETE" });
@@ -290,6 +329,11 @@ export default function MembersPage() {
   const onSaved = async () => {
     setModalOpen(false);
     setEditing(null);
+    await load();
+  };
+
+  const onPaymentSaved = async () => {
+    setPaymentMember(null);
     await load();
   };
 
@@ -454,6 +498,16 @@ export default function MembersPage() {
                             </button>
                             <button
                               type="button"
+                              className="icon-btn"
+                              data-tooltip="결제 관리"
+                              aria-label="결제 관리"
+                              title="결제 관리"
+                              onClick={() => openPayment(m)}
+                            >
+                              <MaterialPaymentIcon />
+                            </button>
+                            <button
+                              type="button"
                               className={`icon-btn ${membershipState === "PAUSED" ? "icon-btn-resume" : "icon-btn-pause"}`}
                               data-tooltip={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
                               aria-label={membershipState === "PAUSED" ? "회원 등록 재개" : "회원 등록 정지"}
@@ -530,6 +584,14 @@ export default function MembersPage() {
           onSaved={onSaved}
         />
       )}
+
+      {paymentMember && (
+        <PaymentModal
+          member={paymentMember}
+          onClose={() => setPaymentMember(null)}
+          onSaved={onPaymentSaved}
+        />
+      )}
     </ConsoleShell>
   );
 }
@@ -569,14 +631,33 @@ function MemberModal({
   const [expireDate, setExpireDate] = useState(defaultExpireDate);
   const [memo, setMemo] = useState(member?.memo ?? "");
   const [registrationMonths, setRegistrationMonths] = useState<RegistrationPlanValue | "">(defaultRegistrationMonths);
+  const [initialPaymentAmount, setInitialPaymentAmount] = useState(
+    isEdit ? "" : String(Number(defaultRegistrationMonths || "1") * DEFAULT_UNIT_PRICE),
+  );
+  const [unitPrice, setUnitPrice] = useState(DEFAULT_UNIT_PRICE);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = Number(window.localStorage.getItem(STORAGE_UNIT_PRICE_KEY));
+    if (!Number.isFinite(stored) || stored <= 0) return;
+    const rounded = Math.round(stored);
+    setUnitPrice(rounded);
+    if (!isEdit) {
+      const months = Number(defaultRegistrationMonths || "1");
+      setInitialPaymentAmount(String(Math.max(1, months) * rounded));
+    }
+  }, [defaultRegistrationMonths, isEdit]);
 
   const applyRegistrationPlan = (plan: RegistrationPlanValue) => {
     const baseDate = paymentDate || todayYYYYMMDD();
     if (!paymentDate) setPaymentDate(baseDate);
     setRegistrationMonths(plan);
     setExpireDate(addMonthsToDateString(baseDate, Number(plan)));
+    if (!isEdit) {
+      setInitialPaymentAmount(String(Number(plan) * unitPrice));
+    }
   };
 
   const save = async () => {
@@ -585,8 +666,8 @@ function MemberModal({
     try {
       const normalizedPhone = phone.replace(/\D/g, "");
 
-      if (!name.trim() || !gender || !belt || !normalizedPhone || !expireDate) {
-        setErr("이름/성별/띠/전화/만료일은 필수");
+      if (!name.trim() || !gender || !belt || !normalizedPhone) {
+        setErr("이름/성별/띠/전화는 필수");
         return;
       }
       if (normalizedPhone.length < 9) {
@@ -594,29 +675,52 @@ function MemberModal({
         return;
       }
 
-      const payload = {
+      const basePayload = {
         name: name.trim(),
         gender,
         belt,
         belt_gral: beltGral,
         phone: normalizedPhone,
         birth_date: birthDate || null,
-        start_date: paymentDate ? paymentDate : null,
-        expire_date: expireDate,
         memo: memo.trim() ? memo.trim() : null,
-        ...(isEdit ? {} : { join_date: joinDate || todayYYYYMMDD() }),
       };
 
       if (isEdit) {
         await apiFetch(`/api/members/${member!.id}`, {
           method: "PATCH",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(basePayload),
         });
       } else {
-        await apiFetch(`/api/members`, {
+        if (!expireDate) {
+          setErr("회원 추가 시 만료일은 필수입니다.");
+          return;
+        }
+
+        const createPayload = {
+          ...basePayload,
+          join_date: joinDate || todayYYYYMMDD(),
+          start_date: paymentDate || null,
+          expire_date: expireDate,
+        };
+
+        const created = await apiFetch<MemberMutationResponse>(`/api/members`, {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(createPayload),
         });
+
+        const paymentAmount = Number(initialPaymentAmount.replace(/[^\d]/g, ""));
+        if (paymentDate && Number.isFinite(paymentAmount) && paymentAmount > 0) {
+          const months = Number(registrationMonths || "1");
+          await apiFetch<PaymentMutationResponse>(`/api/members/${created.member.id}/payments`, {
+            method: "POST",
+            body: JSON.stringify({
+              payment_date: paymentDate,
+              months: Number.isFinite(months) && months > 0 ? months : 1,
+              amount: paymentAmount,
+              memo: memo.trim() ? memo.trim() : null,
+            }),
+          });
+        }
       }
 
       await onSaved();
@@ -636,7 +740,7 @@ function MemberModal({
     >
       <div className="modal-card">
         <div className="modal-header">
-          <h2 className="modal-title">{isEdit ? "회원 수정" : "회원 추가"}</h2>
+          <h2 className="modal-title">{isEdit ? "회원 정보 수정" : "회원 추가"}</h2>
           <button type="button" className="btn btn-secondary" onClick={onClose}>
             닫기
           </button>
@@ -743,51 +847,68 @@ function MemberModal({
               />
             </label>
 
-            <label className="field-label">
-              결제일
-              <input
-                className="input"
-                type="date"
-                value={paymentDate}
-                onChange={(e) => {
-                  const nextDate = e.target.value;
-                  setPaymentDate(nextDate);
-                  if (registrationMonths) {
-                    const baseDate = nextDate || todayYYYYMMDD();
-                    setExpireDate(addMonthsToDateString(baseDate, Number(registrationMonths)));
-                  }
-                }}
-              />
-            </label>
+            {!isEdit ? (
+              <>
+                <label className="field-label">
+                  결제일
+                  <input
+                    className="input"
+                    type="date"
+                    value={paymentDate}
+                    onChange={(e) => {
+                      const nextDate = e.target.value;
+                      setPaymentDate(nextDate);
+                      if (registrationMonths) {
+                        const baseDate = nextDate || todayYYYYMMDD();
+                        setExpireDate(addMonthsToDateString(baseDate, Number(registrationMonths)));
+                      }
+                    }}
+                  />
+                </label>
 
-            <label className="field-label">
-              등록 기간
-              <div className="duration-options">
-                {REGISTRATION_PLANS.map((plan) => (
-                  <button
-                    key={plan.value}
-                    type="button"
-                    className={`duration-option ${registrationMonths === plan.value ? "active" : ""}`}
-                    onClick={() => applyRegistrationPlan(plan.value)}
-                  >
-                    {plan.label}
-                  </button>
-                ))}
-              </div>
-            </label>
+                <label className="field-label">
+                  등록 기간
+                  <div className="duration-options">
+                    {REGISTRATION_PLANS.map((plan) => (
+                      <button
+                        key={plan.value}
+                        type="button"
+                        className={`duration-option ${registrationMonths === plan.value ? "active" : ""}`}
+                        onClick={() => applyRegistrationPlan(plan.value)}
+                      >
+                        {plan.label}
+                      </button>
+                    ))}
+                  </div>
+                </label>
 
-            <label className="field-label">
-              만료일*
-              <input
-                className="input"
-                type="date"
-                value={expireDate}
-                onChange={(e) => {
-                  setExpireDate(e.target.value);
-                  setRegistrationMonths("");
-                }}
-              />
-            </label>
+                <label className="field-label">
+                  만료일*
+                  <input
+                    className="input"
+                    type="date"
+                    value={expireDate}
+                    onChange={(e) => {
+                      setExpireDate(e.target.value);
+                      setRegistrationMonths("");
+                    }}
+                  />
+                </label>
+
+                <label className="field-label">
+                  초기 결제금액
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    value={initialPaymentAmount}
+                    onChange={(e) => setInitialPaymentAmount(e.target.value.replace(/[^\d]/g, ""))}
+                    placeholder={String(unitPrice)}
+                  />
+                </label>
+              </>
+            ) : (
+              <p className="settings-help">결제/만료일 변경은 회원 목록의 `결제 관리`에서 처리하세요.</p>
+            )}
 
             <label className="field-label">
               메모
@@ -803,6 +924,198 @@ function MemberModal({
             </button>
             <button type="button" className="btn btn-primary" onClick={save} disabled={loading}>
               {loading ? "저장 중..." : "저장"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PaymentModal({
+  member,
+  onClose,
+  onSaved,
+}: {
+  member: Member;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [items, setItems] = useState<MemberPayment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [paymentDate, setPaymentDate] = useState(todayYYYYMMDD());
+  const [months, setMonths] = useState<RegistrationPlanValue>("1");
+  const [amount, setAmount] = useState(String(DEFAULT_UNIT_PRICE));
+  const [memo, setMemo] = useState("");
+  const [unitPrice, setUnitPrice] = useState(DEFAULT_UNIT_PRICE);
+
+  const expirePreview = useMemo(
+    () => addMonthsToDateString(paymentDate || todayYYYYMMDD(), Number(months)),
+    [months, paymentDate],
+  );
+
+  const loadPayments = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const response = await apiFetch<PaymentsResponse>(`/api/members/${member.id}/payments`);
+      setItems(response.items ?? []);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "결제 내역을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, [member.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = Number(window.localStorage.getItem(STORAGE_UNIT_PRICE_KEY));
+    if (!Number.isFinite(stored) || stored <= 0) return;
+    const rounded = Math.round(stored);
+    setUnitPrice(rounded);
+    setAmount(String(rounded));
+  }, []);
+
+  useEffect(() => {
+    void loadPayments();
+  }, [loadPayments]);
+
+  const submitPayment = async () => {
+    setSaving(true);
+    setErr(null);
+    try {
+      const parsedAmount = Number(amount.replace(/[^\d]/g, ""));
+      if (!paymentDate) {
+        setErr("결제일을 입력해 주세요.");
+        return;
+      }
+      if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+        setErr("결제금액은 0보다 큰 숫자여야 합니다.");
+        return;
+      }
+
+      await apiFetch<PaymentMutationResponse>(`/api/members/${member.id}/payments`, {
+        method: "POST",
+        body: JSON.stringify({
+          payment_date: paymentDate,
+          months: Number(months),
+          amount: parsedAmount,
+          memo: memo.trim() ? memo.trim() : null,
+        }),
+      });
+
+      await onSaved();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "결제 저장 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-card">
+        <div className="modal-header">
+          <h2 className="modal-title">결제 관리 - {member.name}</h2>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            닫기
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div className="field-grid">
+            <label className="field-label">
+              결제일
+              <input
+                className="input"
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+              />
+            </label>
+
+            <label className="field-label">
+              등록 기간
+              <div className="duration-options">
+                {REGISTRATION_PLANS.map((plan) => (
+                  <button
+                    key={plan.value}
+                    type="button"
+                    className={`duration-option ${months === plan.value ? "active" : ""}`}
+                    onClick={() => {
+                      setMonths(plan.value);
+                      setAmount(String(unitPrice * Number(plan.value)));
+                    }}
+                  >
+                    {plan.label}
+                  </button>
+                ))}
+              </div>
+            </label>
+
+            <label className="field-label">
+              다음 만료일(자동계산)
+              <input className="input" type="date" value={expirePreview} disabled />
+            </label>
+
+            <label className="field-label">
+              결제금액
+              <input
+                className="input"
+                inputMode="numeric"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder={String(unitPrice)}
+              />
+            </label>
+
+            <label className="field-label">
+              메모
+              <textarea className="textarea" rows={3} value={memo} onChange={(e) => setMemo(e.target.value)} />
+            </label>
+          </div>
+
+          <div className="payments-history">
+            <p className="payments-history-title">최근 결제 내역</p>
+            {loading ? (
+              <p className="payments-empty">결제 내역 불러오는 중...</p>
+            ) : items.length === 0 ? (
+              <p className="payments-empty">결제 내역이 없습니다.</p>
+            ) : (
+              <ul className="payments-list">
+                {items.map((item) => (
+                  <li key={item.id} className="payments-item">
+                    <div className="payments-item-top">
+                      <span>{item.payment_date}</span>
+                      <strong>{formatKRW(item.amount)}</strong>
+                    </div>
+                    <div className="payments-item-bottom">
+                      <span>{item.months}개월</span>
+                      <span>만료 {item.expire_date}</span>
+                    </div>
+                    {item.memo ? <p className="payments-item-memo">{item.memo}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {err ? <div className="error-text">{err}</div> : null}
+
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
+              취소
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => void submitPayment()} disabled={saving}>
+              {saving ? "결제 중..." : "결제"}
             </button>
           </div>
         </div>

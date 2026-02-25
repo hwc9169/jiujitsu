@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { requireUserIdFromAuthHeader, getGymIdByUserId } from "@/lib/supabase/gym";
+import { getGymIdByUserId, requireUserIdFromAuthHeader } from "@/lib/supabase/gym";
 
 type DashboardCounts = {
   total_member_count?: number;
   overdue_count: number;
   expiring_7d_count: number;
   new_this_month: number;
-};
-
-type MemberRevenueRow = {
-  start_date: string | null;
-  expire_date: string;
-  created_at: string;
 };
 
 type DailySalesPoint = {
@@ -22,6 +16,11 @@ type DailySalesPoint = {
   member_count: number;
 };
 
+type PaymentRevenueRow = {
+  payment_date: string;
+  amount: number;
+};
+
 type MonthRef = {
   year: number;
   month: number;
@@ -29,15 +28,7 @@ type MonthRef = {
   label: string;
 };
 
-const DEFAULT_UNIT_PRICE = 150000;
-const MIN_UNIT_PRICE = 10000;
-const MAX_UNIT_PRICE = 500000;
 const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-function parseDateOnly(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, (month || 1) - 1, day || 1);
-}
 
 function parseDateParts(value: string) {
   const matched = DATE_ONLY_REGEX.exec(value.trim());
@@ -115,12 +106,20 @@ function shiftMonth(base: MonthRef, delta: number) {
   } satisfies MonthRef;
 }
 
-function durationMonths(startDateRaw: string, expireDateRaw: string) {
-  const start = parseDateOnly(startDateRaw);
-  const end = parseDateOnly(expireDateRaw);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 1;
-  const diff = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-  return Math.max(1, diff);
+function toDateString(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getMonthRange(month: MonthRef) {
+  const start = new Date(month.year, month.month - 1, 1);
+  const end = new Date(month.year, month.month, 0);
+  return {
+    from: toDateString(start),
+    to: toDateString(end),
+  };
 }
 
 function getDailySeries(year: number, month: number) {
@@ -139,6 +138,10 @@ function getDailySeries(year: number, month: number) {
   return points;
 }
 
+function sumPaymentRows(rows: PaymentRevenueRow[] | null | undefined) {
+  return (rows ?? []).reduce((sum, row) => sum + Math.max(0, Number(row.amount) || 0), 0);
+}
+
 export async function GET(req: Request) {
   try {
     const userId = await requireUserIdFromAuthHeader(req);
@@ -149,65 +152,100 @@ export async function GET(req: Request) {
     const selectedMonth = normalizeMonth(url.searchParams.get("month"));
     const currentMonth = normalizeMonth(null);
     const previousMonth = shiftMonth(currentMonth, -1);
-    const unitPriceParam = Number(url.searchParams.get("unitPrice") || DEFAULT_UNIT_PRICE);
-    const unitPrice = Math.min(MAX_UNIT_PRICE, Math.max(MIN_UNIT_PRICE, Number.isFinite(unitPriceParam) ? unitPriceParam : DEFAULT_UNIT_PRICE));
+
+    const selectedRange = getMonthRange(selectedMonth);
+    const currentRange = getMonthRange(currentMonth);
+    const previousRange = getMonthRange(previousMonth);
 
     const sb = supabaseServer();
-    const { data, error } = await sb.rpc("dashboard_counts", { p_gym_id: gymId });
 
-    // rpc 안 만들었으면 아래처럼 raw SQL view/rpc 만들거나,
-    // members 테이블로 filter count를 3번 쏘면 됨.
-    if (error) {
-      return NextResponse.json({ error: "RPC not found. Create dashboard_counts RPC or implement 3 queries." }, { status: 501 });
+    const [
+      countsResult,
+      membersCountResult,
+      newThisMonthMembersCountResult,
+      selectedPaymentsResult,
+      currentPaymentsResult,
+      previousPaymentsResult,
+    ] = await Promise.all([
+      sb.rpc("dashboard_counts", { p_gym_id: gymId }),
+      sb
+        .from("members")
+        .select("id", { count: "exact", head: true })
+        .eq("gym_id", gymId)
+        .is("deleted_at", null),
+      sb
+        .from("members")
+        .select("id", { count: "exact", head: true })
+        .eq("gym_id", gymId)
+        .is("deleted_at", null)
+        .gte("join_date", currentRange.from)
+        .lte("join_date", currentRange.to),
+      sb
+        .from("payments")
+        .select("payment_date, amount")
+        .eq("gym_id", gymId)
+        .gte("payment_date", selectedRange.from)
+        .lte("payment_date", selectedRange.to)
+        .order("payment_date", { ascending: true }),
+      sb
+        .from("payments")
+        .select("payment_date, amount")
+        .eq("gym_id", gymId)
+        .gte("payment_date", currentRange.from)
+        .lte("payment_date", currentRange.to),
+      sb
+        .from("payments")
+        .select("payment_date, amount")
+        .eq("gym_id", gymId)
+        .gte("payment_date", previousRange.from)
+        .lte("payment_date", previousRange.to),
+    ]);
+
+    if (countsResult.error) {
+      return NextResponse.json(
+        { error: "RPC not found. Create dashboard_counts RPC or implement 3 queries." },
+        { status: 501 },
+      );
     }
-
-    const { data: membersData, error: membersError } = await sb
-      .from("members")
-      .select("start_date, expire_date, created_at")
-      .eq("gym_id", gymId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true });
-
-    if (membersError) {
-      return NextResponse.json({ error: membersError.message }, { status: 500 });
+    if (membersCountResult.error) {
+      return NextResponse.json({ error: membersCountResult.error.message }, { status: 500 });
+    }
+    if (newThisMonthMembersCountResult.error) {
+      return NextResponse.json({ error: newThisMonthMembersCountResult.error.message }, { status: 500 });
+    }
+    if (selectedPaymentsResult.error) {
+      return NextResponse.json({ error: selectedPaymentsResult.error.message }, { status: 500 });
+    }
+    if (currentPaymentsResult.error) {
+      return NextResponse.json({ error: currentPaymentsResult.error.message }, { status: 500 });
+    }
+    if (previousPaymentsResult.error) {
+      return NextResponse.json({ error: previousPaymentsResult.error.message }, { status: 500 });
     }
 
     const dailySales = getDailySeries(selectedMonth.year, selectedMonth.month);
-    const monthlyMap = new Map<string, { estimated_sales: number; member_count: number }>();
+    for (const payment of (selectedPaymentsResult.data ?? []) as PaymentRevenueRow[]) {
+      const parts = parseDateParts(payment.payment_date);
+      if (!parts) continue;
 
-    for (const member of (membersData ?? []) as MemberRevenueRow[]) {
-      if (!member.expire_date) continue;
-      const startSource = member.start_date || member.created_at.slice(0, 10);
-      if (!startSource) continue;
-
-      const startParts = parseDateParts(startSource);
-      if (!startParts) continue;
-
-      const estimatedSales = durationMonths(startSource, member.expire_date) * unitPrice;
-      const key = monthKeyFromParts(startParts.year, startParts.month);
-      const monthBucket = monthlyMap.get(key) ?? { estimated_sales: 0, member_count: 0 };
-      monthBucket.member_count += 1;
-      monthBucket.estimated_sales += estimatedSales;
-      monthlyMap.set(key, monthBucket);
-
-      if (key !== selectedMonth.key) continue;
-
-      const dayIndex = startParts.day - 1;
+      const dayIndex = parts.day - 1;
       if (dayIndex < 0 || dayIndex >= dailySales.length) continue;
 
+      const amount = Math.max(0, Number(payment.amount) || 0);
       dailySales[dayIndex].member_count += 1;
-      dailySales[dayIndex].estimated_sales += estimatedSales;
+      dailySales[dayIndex].estimated_sales += amount;
     }
 
-    const selectedMonthSales = dailySales.reduce((sum, point) => sum + point.estimated_sales, 0);
-    const currentMonthSales = monthlyMap.get(currentMonth.key)?.estimated_sales ?? 0;
-    const previousMonthSales = monthlyMap.get(previousMonth.key)?.estimated_sales ?? 0;
-    const totalMemberCount = (membersData ?? []).length;
+    const selectedMonthSales = sumPaymentRows(selectedPaymentsResult.data as PaymentRevenueRow[]);
+    const currentMonthSales = sumPaymentRows(currentPaymentsResult.data as PaymentRevenueRow[]);
+    const previousMonthSales = sumPaymentRows(previousPaymentsResult.data as PaymentRevenueRow[]);
+    const totalMemberCount = membersCountResult.count ?? 0;
+    const newThisMonthJoinCount = newThisMonthMembersCountResult.count ?? 0;
 
     return NextResponse.json({
-      ...(data as DashboardCounts),
+      ...(countsResult.data as DashboardCounts),
       total_member_count: totalMemberCount,
-      unit_price: unitPrice,
+      new_this_month: newThisMonthJoinCount,
       selected_month: selectedMonth.key,
       selected_month_label: selectedMonth.label,
       daily_sales: dailySales,
