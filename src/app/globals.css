@@ -303,6 +303,10 @@ textarea {
   gap: 12px;
 }
 
+.topbar-mobile-title {
+  display: none;
+}
+
 .page-title {
   margin: 0;
   font-size: clamp(22px, 2.6vw, 32px);
@@ -439,6 +443,7 @@ textarea {
 .sales-line-chart-wrap {
   padding: 14px 16px 16px;
   overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 .sales-line-chart {
@@ -786,6 +791,30 @@ textarea {
   font-size: 13px;
 }
 
+.member-check-col {
+  width: 46px;
+  text-align: center !important;
+}
+
+.member-check-input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.members-bulk-message-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.members-bulk-message-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 .icon-btn {
   --icon-btn-bg: var(--surface-soft);
   --icon-btn-border: var(--line);
@@ -836,7 +865,7 @@ textarea {
   --icon-btn-color: var(--primary);
 }
 
-.icon-btn-sms {
+.icon-btn-message {
   --icon-btn-color: var(--success);
 }
 
@@ -1368,6 +1397,80 @@ textarea {
   color: var(--muted);
 }
 
+.message-job-row {
+  cursor: pointer;
+}
+
+.message-job-row:hover td {
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface-soft));
+}
+
+.message-job-row-active,
+.message-job-row-active td {
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface-soft));
+}
+
+.message-job-row-active:hover,
+.message-job-row-active:hover td {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-soft));
+}
+
+.admin-table tr.message-job-row-active,
+.admin-table tr.message-job-row-active td,
+.admin-table tr.message-job-row-active th {
+  transition: background-color 0.15s ease;
+}
+
+.message-job-status,
+.message-recipient-status {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.message-job-status-pending {
+  border-color: color-mix(in srgb, var(--muted) 32%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft) 84%, var(--line));
+  color: var(--muted);
+}
+
+.message-job-status-processing {
+  border-color: color-mix(in srgb, var(--warning) 32%, var(--line));
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.message-job-status-completed {
+  border-color: color-mix(in srgb, var(--success) 32%, var(--line));
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.message-job-status-partial_failed,
+.message-job-status-failed {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.message-recipient-status-queued {
+  border-color: color-mix(in srgb, var(--muted) 28%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft) 82%, var(--line));
+  color: var(--muted);
+}
+
+.message-recipient-status-sent {
+  border-color: color-mix(in srgb, var(--success) 30%, var(--line));
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.message-recipient-status-failed,
+.message-recipient-status-blocked {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--line));
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .alert-error {
   border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
   background: var(--danger-soft);
@@ -1482,6 +1585,14 @@ textarea {
   padding: 4px;
 }
 
+.calendar-view-tab-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
 .calendar-view-tab {
   flex: 1;
   border: 0;
@@ -1502,8 +1613,8 @@ textarea {
 
 .calendar-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 228px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  gap: 10px;
   align-items: stretch;
   height: calc(100dvh - 120px);
   min-height: 0;
@@ -1569,6 +1680,39 @@ textarea {
   display: block;
   width: 18px;
   height: 18px;
+}
+
+.calendar-program-drawer-trigger {
+  display: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: color-mix(in srgb, var(--foreground) 68%, var(--muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.calendar-program-drawer-trigger:hover {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--line));
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
+
+.calendar-program-drawer-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 56%, transparent);
+  outline-offset: 2px;
+}
+
+.calendar-program-drawer-trigger svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 
 .calendar-share-btn {
@@ -1794,6 +1938,112 @@ textarea {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+}
+
+.calendar-program-panel-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.calendar-program-panel-head .panel-title {
+  margin: 0;
+}
+
+.calendar-program-drawer-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, #000000 44%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 88;
+}
+
+.calendar-program-drawer-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.calendar-program-drawer {
+  display: none;
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(360px, 92vw);
+  height: auto;
+  min-height: 100svh;
+  max-height: 100dvh;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: 0 20px 44px color-mix(in srgb, var(--foreground) 22%, transparent);
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+  z-index: 89;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.calendar-program-drawer.open {
+  transform: translateX(0);
+}
+
+.calendar-program-drawer-head {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.calendar-program-drawer-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-program-drawer-icon {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: color-mix(in srgb, var(--foreground) 68%, var(--muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.calendar-program-drawer-icon:hover {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--line));
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface-soft));
+}
+
+.calendar-program-drawer-icon:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 56%, transparent);
+  outline-offset: 2px;
+}
+
+.calendar-program-drawer-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.calendar-program-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 10px 10px;
 }
 
 .calendar-program-panel-body {
@@ -2067,7 +2317,7 @@ textarea {
 @media (max-width: 1100px) {
   .calendar-layout {
     height: auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 240px);
   }
 
   .calendar-main-panel {
@@ -2082,9 +2332,12 @@ textarea {
   }
 
   .calendar-program-panel {
-    position: static;
-    height: auto;
-    min-height: 340px;
+    height: calc(100dvh - 120px);
+    min-height: 0;
+  }
+
+  .calendar-program-drawer {
+    width: min(340px, 94vw);
   }
 }
 
@@ -2298,7 +2551,9 @@ textarea {
     position: fixed;
     inset: 0 auto 0 0;
     width: min(82vw, 320px);
-    height: 100dvh;
+    height: auto;
+    min-height: 100svh;
+    max-height: 100dvh;
     background: var(--surface);
     border-right: 1px solid var(--line);
     box-shadow: 0 18px 40px color-mix(in srgb, var(--foreground) 25%, transparent);
@@ -2423,6 +2678,13 @@ textarea {
     padding: 12px 12px 88px;
   }
 
+  .admin-main.admin-main-calendar {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    padding: 8px;
+  }
+
   .admin-topbar {
     flex-direction: row;
     align-items: flex-start;
@@ -2471,12 +2733,39 @@ textarea {
   }
 
   .topbar-heading.topbar-heading-compact {
-    width: auto;
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .topbar-mobile-title {
+    display: block;
+    margin: 0;
+    min-width: 0;
+    flex: 1;
+    text-align: right;
+    font-size: clamp(24px, 4.4vw, 28px);
+    line-height: 1.2;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: var(--foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .topbar-actions,
   .search-group {
     width: 100%;
+  }
+
+  .admin-content.admin-content-calendar {
+    display: block;
+    height: calc(100dvh - 46px);
+    min-height: 0;
+    margin-top: 6px;
+    overflow: hidden;
   }
 
   .desktop-only-action {
@@ -2505,6 +2794,11 @@ textarea {
   .tab-button {
     flex: 0 0 auto;
     font-size: 13px;
+  }
+
+  .members-toolbar .tab-button {
+    font-size: clamp(11px, 3.2vw, 13px);
+    padding: 6px 10px;
   }
 
   .kpi-grid {
@@ -2560,10 +2854,74 @@ textarea {
   .members-subhead-actions {
     width: 100%;
     justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .members-subhead-actions .btn {
+    flex: 1;
+    min-width: 140px;
+    font-size: clamp(11px, 3.2vw, 13px);
+    padding: 7px 10px;
+    border-radius: 9px;
+  }
+
+  .members-bulk-message-btn .members-bulk-message-label {
+    display: none;
+  }
+
+  .members-bulk-message-btn {
+    min-width: 40px;
+    max-width: 46px;
+    justify-content: center;
+    padding: 0 6px;
+  }
+
+  .members-table .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
+
+  .members-table .icon-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .members-table th {
+    font-size: clamp(11px, 3.1vw, 12px);
+    padding: 9px 10px;
+  }
+
+  .members-table td {
+    font-size: clamp(12px, 3.2vw, 13px);
+    padding: 10px;
+  }
+
+  .members-table .member-name {
+    font-size: clamp(12px, 3.4vw, 14px);
+  }
+
+  .members-table .member-phone {
+    font-size: clamp(11px, 3.1vw, 12px);
+  }
+
+  .members-table .chip {
+    font-size: clamp(10px, 2.9vw, 11px);
+    padding: 3px 8px;
   }
 
   .sales-line-chart-wrap {
     padding: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sales-line-chart {
+    width: max(100%, var(--sales-chart-min-width, 760px));
+    min-width: var(--sales-chart-min-width, 760px);
+    max-width: none;
   }
 
   .sales-y-label {
@@ -2612,5 +2970,492 @@ textarea {
     line-height: 1;
     box-shadow: 0 14px 28px color-mix(in srgb, var(--primary) 40%, transparent);
     z-index: 60;
+  }
+
+  .calendar-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .calendar-main-panel {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .calendar-view-tabs {
+    width: calc(100% - 16px);
+    margin: 8px;
+  }
+
+  .calendar-view-tab-group {
+    min-width: 0;
+  }
+
+  .calendar-program-drawer-trigger {
+    display: inline-flex;
+  }
+
+  .calendar-view-tab {
+    font-size: 12px;
+    padding: 7px 8px;
+  }
+
+  .calendar-month-header {
+    padding: 8px 10px;
+  }
+
+  .calendar-month-toolbar {
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .calendar-today-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .calendar-month-nav {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .calendar-month-title {
+    min-width: 0;
+    flex: 0 1 auto;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .calendar-month-toolbar-right {
+    min-width: 0;
+    margin-left: 0;
+    flex: 0 0 auto;
+  }
+
+  .calendar-share-status {
+    display: none;
+  }
+
+  .calendar-grid-shell {
+    overflow: hidden;
+  }
+
+  .calendar-grid-head,
+  .calendar-grid {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .calendar-grid {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+  }
+
+  .calendar-cell {
+    padding: 3px 4px;
+    gap: 3px;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .calendar-cell-day {
+    min-width: 18px;
+    font-size: 10px;
+    padding: 1px 3px;
+  }
+
+  .calendar-cell-events {
+    gap: 2px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .calendar-chip {
+    height: 14px;
+    font-size: 8px;
+    padding: 0 4px;
+  }
+
+  .calendar-routine-shell {
+    padding: 8px;
+    overflow: auto;
+  }
+
+  .calendar-routine-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+    gap: 8px;
+  }
+
+  .calendar-routine-day {
+    height: auto;
+  }
+
+  .calendar-routine-day-head {
+    justify-content: space-between;
+    padding: 8px 10px;
+  }
+
+  .calendar-routine-day-head .btn {
+    position: static;
+    padding: 5px 9px;
+    font-size: 12px;
+  }
+
+  .calendar-routine-day-list {
+    max-height: 210px;
+  }
+
+  .calendar-program-panel {
+    display: none;
+  }
+
+  .calendar-program-panel-body {
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .calendar-program-drawer-backdrop {
+    display: block;
+  }
+
+  .calendar-program-drawer {
+    display: flex;
+    width: min(320px, 94vw);
+  }
+
+  .calendar-program-drawer-head {
+    padding: 10px;
+  }
+
+  .calendar-program-drawer-body {
+    padding: 10px 8px 8px;
+  }
+
+  .calendar-inline-actions {
+    gap: 8px;
+    height: 16px;
+  }
+
+  .calendar-inline-actions .icon-btn {
+    width: 16px;
+    height: 16px;
+  }
+
+  .calendar-inline-actions .icon-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .modal-card.calendar-day-dialog {
+    width: calc(100% - 16px);
+    max-width: none;
+    left: 8px !important;
+    right: 8px;
+    top: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    border-radius: 14px;
+    animation: fade-rise 180ms ease-out;
+  }
+
+  .calendar-day-dialog-body {
+    max-height: min(60dvh, 520px);
+  }
+}
+
+.site-footer {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.site-footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 4px;
+}
+
+.site-footer-line {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.site-footer-line strong {
+  color: var(--foreground);
+}
+
+.site-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-footer-link {
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal-page {
+  min-height: calc(100dvh - 80px);
+  padding: clamp(20px, 3vw, 42px) 16px;
+}
+
+.legal-layout {
+  max-width: 1160px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.legal-toc {
+  position: sticky;
+  top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  box-shadow: var(--shadow-soft);
+  padding: 14px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.legal-toc-title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.legal-toc a {
+  display: block;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--foreground);
+  border-radius: 8px;
+  padding: 6px 8px;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.legal-toc a:hover {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+}
+
+.legal-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--shadow-soft);
+  padding: clamp(18px, 3vw, 36px);
+}
+
+.legal-header {
+  border: 1px solid color-mix(in srgb, var(--line) 90%, var(--surface-soft));
+  border-radius: 14px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--surface) 96%, transparent) 0%,
+    color-mix(in srgb, var(--surface-soft) 74%, var(--surface)) 100%
+  );
+  padding: clamp(14px, 2vw, 22px);
+}
+
+.legal-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 15%, var(--surface));
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+}
+
+.legal-title {
+  margin: 10px 0 0;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.25;
+}
+
+.legal-lead {
+  margin: 12px 0 0;
+  line-height: 1.7;
+  color: color-mix(in srgb, var(--foreground) 86%, var(--muted));
+}
+
+.legal-meta {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.legal-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 10px;
+}
+
+.legal-effective {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.legal-section {
+  margin-top: 22px;
+}
+
+.legal-section-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  padding: clamp(12px, 1.8vw, 18px);
+}
+
+.legal-section h2 {
+  margin: 0;
+  font-size: clamp(18px, 2vw, 22px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legal-index {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+}
+
+.legal-section h3 {
+  margin: 12px 0 0;
+  font-size: 16px;
+  color: color-mix(in srgb, var(--foreground) 90%, var(--muted));
+}
+
+.legal-section p {
+  margin: 10px 0 0;
+  line-height: 1.72;
+  color: color-mix(in srgb, var(--foreground) 88%, var(--muted));
+}
+
+.legal-section ul {
+  margin: 10px 0 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
+}
+
+.legal-list li {
+  line-height: 1.64;
+  color: color-mix(in srgb, var(--foreground) 92%, var(--muted));
+}
+
+@media (max-width: 768px) {
+  .site-footer-inner {
+    padding-inline: 12px;
+  }
+
+  .site-footer-line,
+  .site-footer-link {
+    font-size: 11px;
+  }
+
+  .legal-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .legal-toc {
+    position: static;
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+    white-space: nowrap;
+    padding: 10px;
+  }
+
+  .legal-toc-title {
+    display: none;
+  }
+
+  .legal-toc a {
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+
+  .legal-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .legal-header {
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .legal-section-card {
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .legal-section h2 {
+    font-size: 17px;
+  }
+
+  .legal-section h3 {
+    font-size: 14px;
+  }
+
+  .legal-section p,
+  .legal-list li {
+    font-size: 14px;
   }
 }

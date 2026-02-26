@@ -32,6 +32,17 @@ type PaymentMutationResponse = {
   payment: MemberPayment;
 };
 
+type MessageSendResponse = {
+  ok: boolean;
+  job_id: string;
+  counts: {
+    requested: number;
+    sent: number;
+    failed: number;
+    blocked: number;
+  };
+};
+
 type FilterStatus = MemberStatus | "INACTIVE" | "ALL";
 
 const TABS: { key: FilterStatus; label: string }[] = [
@@ -238,10 +249,10 @@ function MaterialDeleteIcon() {
   );
 }
 
-function MaterialSmsIcon() {
+function MaterialMessageIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2Zm0 14H5.17L4 17.17V4h16v12Zm-9-5h2v2h-2v-2Zm-4 0h2v2H7v-2Zm8 0h2v2h-2v-2Z" />
+      <path d="M4 4h16a2 2 0 0 1 2 2v15l-4-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm2 4v2h12V8H6Zm0 4v2h8v-2H6Z" />
     </svg>
   );
 }
@@ -256,14 +267,25 @@ export default function MembersPage() {
   const [items, setItems] = useState<Member[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [notifyingId, setNotifyingId] = useState<string | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
 
   // modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
   const [paymentMember, setPaymentMember] = useState<Member | null>(null);
+  const [alimtalkModal, setAlimtalkModal] = useState<{
+    gymId: string;
+    memberIds: string[];
+    mode: "single" | "bulk";
+  } | null>(null);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(count / pageSize)), [count]);
+  const selectableMemberIds = useMemo(() => {
+    return items.filter((member) => !(member.deleted_at || member.status === "DELETED")).map((member) => member.id);
+  }, [items]);
+  const selectedSet = useMemo(() => new Set(selectedMemberIds), [selectedMemberIds]);
+  const allSelectableChecked = selectableMemberIds.length > 0 && selectableMemberIds.every((id) => selectedSet.has(id));
+  const hasSomeSelectableChecked = selectableMemberIds.some((id) => selectedSet.has(id));
 
   const load = useCallback(async (nextPage = page) => {
     setLoading(true);
@@ -277,6 +299,8 @@ export default function MembersPage() {
       const res = await apiFetch<MembersResponse>(`/api/members?${qs.toString()}`);
       setItems(res.items);
       setCount(res.count);
+      const visibleIdSet = new Set((res.items ?? []).map((member) => member.id));
+      setSelectedMemberIds((prev) => prev.filter((id) => visibleIdSet.has(id)));
     } finally {
       setLoading(false);
     }
@@ -337,24 +361,59 @@ export default function MembersPage() {
     await load();
   };
 
-  const onSendOverdueNotice = async (m: Member) => {
-    const status = resolveStatus(m);
-    if (status !== "OVERDUE") {
-      alert("미납 회원에게만 안내 문자를 보낼 수 있습니다.");
+  const toggleMemberSelection = (memberId: string) => {
+    setSelectedMemberIds((prev) => {
+      if (prev.includes(memberId)) return prev.filter((id) => id !== memberId);
+      return [...prev, memberId];
+    });
+  };
+
+  const toggleAllMemberSelection = () => {
+    setSelectedMemberIds((prev) => {
+      if (allSelectableChecked) {
+        return prev.filter((id) => !selectableMemberIds.includes(id));
+      }
+      const nextSet = new Set(prev);
+      selectableMemberIds.forEach((id) => nextSet.add(id));
+      return Array.from(nextSet);
+    });
+  };
+
+  const openSingleAlimtalkModal = (member: Member) => {
+    setAlimtalkModal({
+      gymId: member.gym_id,
+      memberIds: [member.id],
+      mode: "single",
+    });
+  };
+
+  const openBulkAlimtalkModal = () => {
+    if (selectedMemberIds.length === 0) {
+      alert("전송할 회원을 선택해 주세요.");
       return;
     }
-    if (!confirm(`${m.name} 회원에게 미납 안내 문자를 보낼까요?`)) return;
 
-    setNotifyingId(m.id);
-    try {
-      const result = await apiFetch<{ sid?: string }>(`/api/members/${m.id}/notify-overdue`, {
-        method: "POST",
-      });
-      alert(result.sid ? `문자 발송 완료 (SID: ${result.sid})` : "문자 발송 완료");
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "문자 발송 중 오류가 발생했습니다.");
-    } finally {
-      setNotifyingId(null);
+    const firstSelected = items.find((member) => selectedMemberIds.includes(member.id));
+    if (!firstSelected?.gym_id) {
+      alert("체육관 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    setAlimtalkModal({
+      gymId: firstSelected.gym_id,
+      memberIds: selectedMemberIds,
+      mode: "bulk",
+    });
+  };
+
+  const onAlimtalkSent = (result: MessageSendResponse) => {
+    const { requested, sent, failed, blocked } = result.counts;
+    alert(
+      `알림톡 전송 완료\n요청: ${requested}건\n성공: ${sent}건\n실패: ${failed}건\n차단: ${blocked}건`,
+    );
+    setAlimtalkModal(null);
+    if (result.counts.requested > 1) {
+      setSelectedMemberIds([]);
     }
   };
 
@@ -400,6 +459,16 @@ export default function MembersPage() {
             <div>{loading ? "회원 목록 불러오는 중..." : `총 ${count}명`}</div>
           </div>
           <div className="members-subhead-actions">
+            <button
+              type="button"
+              className="btn btn-secondary members-bulk-message-btn"
+              onClick={openBulkAlimtalkModal}
+              disabled={selectedMemberIds.length === 0}
+              title="선택 회원 알림톡 전송"
+            >
+              <MaterialMessageIcon />
+              <span className="members-bulk-message-label">선택 회원 알림톡 전송</span>
+            </button>
             <button type="button" className="btn btn-accent" onClick={openCreate}>
               + 회원 추가
             </button>
@@ -410,9 +479,23 @@ export default function MembersPage() {
           {items.length === 0 ? (
             <div className="empty-state">표시할 회원이 없습니다.</div>
           ) : (
-            <table className="admin-table">
+            <table className="admin-table members-table">
               <thead>
                 <tr>
+                  <th className="member-check-col">
+                    <input
+                      type="checkbox"
+                      className="member-check-input"
+                      aria-label="현재 페이지 회원 전체 선택"
+                      checked={allSelectableChecked}
+                      ref={(element) => {
+                        if (!element) return;
+                        element.indeterminate = !allSelectableChecked && hasSomeSelectableChecked;
+                      }}
+                      onChange={toggleAllMemberSelection}
+                      disabled={selectableMemberIds.length === 0}
+                    />
+                  </th>
                   <th>이름</th>
                   <th>성별</th>
                   <th>띠</th>
@@ -450,6 +533,16 @@ export default function MembersPage() {
                   }
                   return (
                     <tr key={m.id}>
+                      <td className="member-check-col">
+                        <input
+                          type="checkbox"
+                          className="member-check-input"
+                          aria-label={`${m.name} 선택`}
+                          checked={selectedSet.has(m.id)}
+                          disabled={isInactive}
+                          onChange={() => toggleMemberSelection(m.id)}
+                        />
+                      </td>
                       <td className="member-name">{m.name}</td>
                       <td>{m.gender ?? "-"}</td>
                       <td>
@@ -516,19 +609,16 @@ export default function MembersPage() {
                             >
                               {membershipState === "PAUSED" ? <MaterialPlayIcon /> : <MaterialPauseIcon />}
                             </button>
-                            {status === "OVERDUE" ? (
-                              <button
-                                type="button"
-                                className="icon-btn icon-btn-sms"
-                                data-tooltip={notifyingId === m.id ? "문자 전송 중..." : "미납 안내 문자 발송"}
-                                aria-label="미납 안내 문자 발송"
-                                title="미납 안내 문자 발송"
-                                onClick={() => onSendOverdueNotice(m)}
-                                disabled={notifyingId === m.id}
-                              >
-                                <MaterialSmsIcon />
-                              </button>
-                            ) : null}
+                            <button
+                              type="button"
+                              className="icon-btn icon-btn-message"
+                              data-tooltip="알림톡 전송"
+                              aria-label="알림톡 전송"
+                              title="알림톡 전송"
+                              onClick={() => openSingleAlimtalkModal(m)}
+                            >
+                              <MaterialMessageIcon />
+                            </button>
                             <button
                               type="button"
                               className="icon-btn icon-btn-danger"
@@ -592,7 +682,96 @@ export default function MembersPage() {
           onSaved={onPaymentSaved}
         />
       )}
+
+      {alimtalkModal ? (
+        <AlimtalkSendModal
+          gymId={alimtalkModal.gymId}
+          memberIds={alimtalkModal.memberIds}
+          mode={alimtalkModal.mode}
+          onClose={() => setAlimtalkModal(null)}
+          onSent={onAlimtalkSent}
+        />
+      ) : null}
     </ConsoleShell>
+  );
+}
+
+function AlimtalkSendModal({
+  gymId,
+  memberIds,
+  mode,
+  onClose,
+  onSent,
+}: {
+  gymId: string;
+  memberIds: string[];
+  mode: "single" | "bulk";
+  onClose: () => void;
+  onSent: (result: MessageSendResponse) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (memberIds.length === 0) {
+      setError("전송할 회원이 없습니다.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiFetch<MessageSendResponse>(`/api/gyms/${gymId}/messages/send-bulk`, {
+        method: "POST",
+        body: JSON.stringify({ member_ids: memberIds }),
+      });
+      onSent(response);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "알림톡 전송 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-card">
+        <div className="modal-header">
+          <h2 className="modal-title">알림톡 전송</h2>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+            닫기
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <p className="settings-help">
+            {mode === "single"
+              ? "선택한 회원에게 만료 알림 알림톡을 전송합니다."
+              : `선택한 ${memberIds.length.toLocaleString("ko-KR")}명에게 만료 알림 알림톡을 일괄 전송합니다.`}
+          </p>
+
+          {error ? <p className="error-text">{error}</p> : null}
+
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+              취소
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => void submit()} disabled={loading}>
+              {loading
+                ? "전송 중..."
+                : mode === "single"
+                  ? "만료 알림 보내기"
+                  : "만료 알림 일괄 전송"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

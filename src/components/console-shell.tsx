@@ -18,17 +18,27 @@ type ConsoleShellProps = {
 
 const MAIN_NAV = [
   { href: "/dashboard", label: "대시보드" },
-  { href: "/members", label: "회원 관리" },
-  { href: "/app/calendar", label: "일정 관리 (베타)" },
+  { href: "/dashboard/members", label: "회원 관리" },
+  { href: "/app/calendar", label: "일정 관리" },
+  { href: "/dashboard/messages/history", label: "문자 로그" },
 ];
 
-const SOON_NAV = ["문자 로그 (준비중)"];
 const MOBILE_MENU_ITEMS: Array<{ href: string; label: string; disabled?: boolean }> = [
   { href: "/dashboard", label: "대시보드" },
-  { href: "/members", label: "회원 관리" },
-  { href: "/app/calendar", label: "일정 관리 (베타)" },
-  { href: "", label: "문자 로그", disabled: true },
+  { href: "/dashboard/members", label: "회원 관리" },
+  { href: "/app/calendar", label: "일정 관리" },
+  { href: "/dashboard/messages/history", label: "문자 로그" },
 ];
+
+function getMobileTopbarTitle(pathname: string) {
+  if (pathname === "/dashboard/members" || pathname.startsWith("/dashboard/members/")) return "회원 관리";
+  if (pathname === "/members" || pathname.startsWith("/members/")) return "회원 관리";
+  if (pathname === "/app/calendar" || pathname.startsWith("/app/calendar/")) return "일정 관리";
+  if (pathname === "/dashboard/messages/history" || pathname.startsWith("/dashboard/messages/history/")) return "문자 로그";
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) return "대시보드";
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) return "체육관 설정";
+  return "주짓때로";
+}
 
 export function ConsoleShell({ actions, children }: ConsoleShellProps) {
   const router = useRouter();
@@ -37,6 +47,8 @@ export function ConsoleShell({ actions, children }: ConsoleShellProps) {
   const [gymMenuOpen, setGymMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const gymMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileTopbarTitle = getMobileTopbarTitle(pathname);
+  const isCalendarPage = pathname === "/app/calendar" || pathname.startsWith("/app/calendar/");
 
   useEffect(() => {
     let mounted = true;
@@ -94,7 +106,7 @@ export function ConsoleShell({ actions, children }: ConsoleShellProps) {
       <aside className="admin-sidebar">
         <Link href="/dashboard" className="brand-wrap" aria-label="주짓때로 대시보드">
           <Image
-            src="/jiujittaero-icon.png"
+            src="/jiujiteiro-icon.png"
             alt="주짓때로"
             className="brand-logo"
             width={1280}
@@ -105,7 +117,9 @@ export function ConsoleShell({ actions, children }: ConsoleShellProps) {
 
         <nav className="admin-nav">
           {MAIN_NAV.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active = item.href === "/dashboard"
+              ? pathname === "/dashboard"
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
@@ -119,11 +133,6 @@ export function ConsoleShell({ actions, children }: ConsoleShellProps) {
             );
           })}
 
-          {SOON_NAV.map((label) => (
-            <span key={label} className="nav-link nav-link-disabled">
-              {label}
-            </span>
-          ))}
         </nav>
         <div className="sidebar-gym">
           <div className="sidebar-gym-head">
@@ -170,7 +179,7 @@ export function ConsoleShell({ actions, children }: ConsoleShellProps) {
         <div className="mobile-drawer-head">
           <Link href="/dashboard" className="mobile-drawer-logo-wrap" onClick={() => setMobileNavOpen(false)}>
             <Image
-              src="/jiujittaero-icon.png"
+              src="/jiujiteiro-icon.png"
               alt="주짓때로"
               className="mobile-drawer-logo"
               width={1280}
@@ -197,7 +206,9 @@ export function ConsoleShell({ actions, children }: ConsoleShellProps) {
                 </span>
               );
             }
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active = item.href === "/dashboard"
+              ? pathname === "/dashboard"
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
@@ -233,7 +244,7 @@ export function ConsoleShell({ actions, children }: ConsoleShellProps) {
         </div>
       </aside>
 
-      <main className="admin-main">
+      <main className={`admin-main ${isCalendarPage ? "admin-main-calendar" : ""}`}>
         <header className="admin-topbar admin-topbar-plain-shell">
           <div className="topbar-heading topbar-heading-compact">
             <button
@@ -248,11 +259,12 @@ export function ConsoleShell({ actions, children }: ConsoleShellProps) {
               <span />
               <span />
             </button>
+            <h1 className="topbar-mobile-title">{mobileTopbarTitle}</h1>
           </div>
           {actions ? <div className="topbar-actions">{actions}</div> : null}
         </header>
 
-        <section className="admin-content">{children}</section>
+        <section className={`admin-content ${isCalendarPage ? "admin-content-calendar" : ""}`}>{children}</section>
       </main>
     </div>
   );

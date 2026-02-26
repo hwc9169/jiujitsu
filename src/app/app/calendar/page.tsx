@@ -222,6 +222,30 @@ function MaterialShareIcon() {
   );
 }
 
+function MaterialViewSidebarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm8 2H5v10h7V7Zm2 0v10h5V7h-5Z" />
+    </svg>
+  );
+}
+
+function MaterialAddIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" />
+    </svg>
+  );
+}
+
+function MaterialCloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+    </svg>
+  );
+}
+
 export default function CalendarPage() {
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(todayDateOnly());
@@ -254,6 +278,8 @@ export default function CalendarPage() {
   const [editingProgramName, setEditingProgramName] = useState("");
   const [shareBusy, setShareBusy] = useState(false);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
+  const [programDrawerOpen, setProgramDrawerOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   const monthRange = useMemo(() => getMonthRange(monthCursor), [monthCursor]);
   const cells = useMemo(() => buildMonthCells(monthCursor), [monthCursor]);
@@ -317,6 +343,44 @@ export default function CalendarPage() {
       window.clearTimeout(timeoutId);
     };
   }, [shareStatus]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
+    syncViewport();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncViewport);
+      return () => mediaQuery.removeEventListener("change", syncViewport);
+    }
+
+    mediaQuery.addListener(syncViewport);
+    return () => mediaQuery.removeListener(syncViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileViewport && programDrawerOpen) {
+      setProgramDrawerOpen(false);
+    }
+  }, [isMobileViewport, programDrawerOpen]);
+
+  useEffect(() => {
+    if (!programDrawerOpen) return;
+    if (!isMobileViewport) return;
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setProgramDrawerOpen(false);
+      }
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleEsc);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleEsc);
+    };
+  }, [isMobileViewport, programDrawerOpen]);
 
   const instanceMap = useMemo(() => {
     const map = new Map<string, CalendarInstance[]>();
@@ -864,6 +928,147 @@ export default function CalendarPage() {
     }
   };
 
+  const renderProgramList = () => {
+    if (loading) {
+      return <p className="empty-state">프로그램을 불러오는 중...</p>;
+    }
+
+    if (activePrograms.length === 0) {
+      return <p className="empty-state">등록된 프로그램이 없습니다.</p>;
+    }
+
+    return (
+      <ul className="calendar-program-list">
+        {activePrograms.map((program) => (
+          <li
+            key={program.id}
+            className="calendar-program-list-item"
+            style={{ "--program-tile-color": normalizeProgramColor(program.color) } as CSSProperties}
+          >
+            <div className="calendar-program-list-main">
+              {editingProgramId === program.id ? (
+                <input
+                  className="input calendar-program-name-input"
+                  value={editingProgramName}
+                  onChange={(event) => setEditingProgramName(event.target.value)}
+                  onBlur={() => {
+                    void handleProgramNameSave(program);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleProgramNameSave(program);
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      cancelProgramNameEdit();
+                    }
+                  }}
+                  autoFocus
+                  disabled={saving}
+                  aria-label="프로그램 이름 입력"
+                />
+              ) : (
+                <p className="calendar-program-list-title">{program.name}</p>
+              )}
+            </div>
+            <div className="calendar-program-actions-menu">
+              <button
+                type="button"
+                className="icon-btn"
+                data-tooltip="프로그램 메뉴"
+                aria-label="프로그램 메뉴"
+                title="프로그램 메뉴"
+                onClick={() => {
+                  if (programMenuId === program.id) {
+                    setProgramMenuId(null);
+                    setProgramColorListId(null);
+                    return;
+                  }
+                  setProgramMenuId(program.id);
+                  setProgramColorListId(null);
+                }}
+                disabled={saving}
+                aria-expanded={programMenuId === program.id}
+              >
+                <MaterialMoreVertIcon />
+              </button>
+              {programMenuId === program.id ? (
+                <div className="calendar-program-dropdown" role="menu" aria-label={`${program.name} 메뉴`}>
+                  <div className="program-dropdown-actions">
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      data-tooltip="프로그램 이름 수정"
+                      aria-label="프로그램 이름 수정"
+                      title="프로그램 이름 수정"
+                      onClick={() => openProgramRename(program)}
+                      disabled={saving}
+                    >
+                      <MaterialEditIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      data-tooltip="프로그램 삭제"
+                      aria-label="프로그램 삭제"
+                      title="프로그램 삭제"
+                      onClick={() => {
+                        cancelProgramNameEdit();
+                        setProgramMenuId(null);
+                        setProgramColorListId(null);
+                        void handleProgramDelete(program);
+                      }}
+                      disabled={saving}
+                    >
+                      <MaterialDeleteIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      data-tooltip="색상 변경"
+                      aria-label="색상 변경"
+                      title="색상 변경"
+                      onClick={() => setProgramColorListId((prev) => (prev === program.id ? null : program.id))}
+                      disabled={saving}
+                    >
+                      <MaterialPaletteIcon />
+                    </button>
+                  </div>
+                  {programColorListId === program.id ? (
+                    <div className="program-color-option-list" role="group" aria-label="프로그램 색상 선택">
+                      {PROGRAM_COLOR_OPTIONS.map((option) => {
+                        const active = option.value.toLowerCase() === normalizeProgramColor(program.color);
+                        return (
+                          <button
+                            key={option.key}
+                            type="button"
+                            className={`program-color-option ${active ? "active" : ""}`}
+                            onClick={() => {
+                              void handleProgramColorUpdate(program, option.value);
+                            }}
+                            disabled={saving}
+                          >
+                            <span
+                              className="program-color-option-swatch"
+                              style={{ "--swatch-color": option.value } as CSSProperties}
+                              aria-hidden="true"
+                            />
+                            <span className="program-color-option-label">{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   return (
     <ConsoleShell>
       {error ? <div className="alert-error">{error}</div> : null}
@@ -871,24 +1076,39 @@ export default function CalendarPage() {
       <section className="calendar-layout">
         <div className="panel calendar-main-panel">
           <div className="calendar-view-tabs" role="tablist" aria-label="일정 보기">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "calendar"}
-              className={`calendar-view-tab ${activeTab === "calendar" ? "active" : ""}`}
-              onClick={() => setActiveTab("calendar")}
-            >
-              캘린더
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "routine"}
-              className={`calendar-view-tab ${activeTab === "routine" ? "active" : ""}`}
-              onClick={() => setActiveTab("routine")}
-            >
-              주간루틴
-            </button>
+            <div className="calendar-view-tab-group">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "calendar"}
+                className={`calendar-view-tab ${activeTab === "calendar" ? "active" : ""}`}
+                onClick={() => setActiveTab("calendar")}
+              >
+                캘린더
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "routine"}
+                className={`calendar-view-tab ${activeTab === "routine" ? "active" : ""}`}
+                onClick={() => setActiveTab("routine")}
+              >
+                주간루틴
+              </button>
+            </div>
+            {isMobileViewport ? (
+              <button
+                type="button"
+                className="calendar-program-drawer-trigger"
+                data-tooltip="프로그램 리스트"
+                aria-label="프로그램 리스트 열기"
+                title="프로그램 리스트 열기"
+                aria-expanded={programDrawerOpen}
+                onClick={() => setProgramDrawerOpen(true)}
+              >
+                <MaterialViewSidebarIcon />
+              </button>
+            ) : null}
           </div>
 
           {activeTab === "calendar" ? (
@@ -1090,150 +1310,64 @@ export default function CalendarPage() {
         </div>
 
         <aside className="panel calendar-program-panel">
-          <div className="panel-header">
+          <div className="calendar-program-panel-head">
             <h3 className="panel-title">프로그램 리스트</h3>
-            <button type="button" className="btn btn-primary" onClick={openProgramCreate} disabled={saving}>
-              + 추가
+            <button
+              type="button"
+              className="calendar-program-drawer-icon"
+              data-tooltip="프로그램 추가"
+              aria-label="프로그램 추가"
+              title="프로그램 추가"
+              onClick={openProgramCreate}
+              disabled={saving}
+            >
+              <MaterialAddIcon />
             </button>
           </div>
-          <div className="calendar-program-panel-body">
-            {loading ? (
-              <p className="empty-state">프로그램을 불러오는 중...</p>
-            ) : programs.filter((program) => program.is_active).length === 0 ? (
-              <p className="empty-state">등록된 프로그램이 없습니다.</p>
-            ) : (
-              <ul className="calendar-program-list">
-                {programs.filter((program) => program.is_active).map((program) => (
-                  <li
-                    key={program.id}
-                    className="calendar-program-list-item"
-                    style={{ "--program-tile-color": normalizeProgramColor(program.color) } as CSSProperties}
-                  >
-                    <div className="calendar-program-list-main">
-                      {editingProgramId === program.id ? (
-                        <input
-                          className="input calendar-program-name-input"
-                          value={editingProgramName}
-                          onChange={(event) => setEditingProgramName(event.target.value)}
-                          onBlur={() => {
-                            void handleProgramNameSave(program);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              void handleProgramNameSave(program);
-                            }
-                            if (event.key === "Escape") {
-                              event.preventDefault();
-                              cancelProgramNameEdit();
-                            }
-                          }}
-                          autoFocus
-                          disabled={saving}
-                          aria-label="프로그램 이름 입력"
-                        />
-                      ) : (
-                        <p className="calendar-program-list-title">{program.name}</p>
-                      )}
-                    </div>
-                    <div className="calendar-program-actions-menu">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        data-tooltip="프로그램 메뉴"
-                        aria-label="프로그램 메뉴"
-                        title="프로그램 메뉴"
-                        onClick={() => {
-                          if (programMenuId === program.id) {
-                            setProgramMenuId(null);
-                            setProgramColorListId(null);
-                            return;
-                          }
-                          setProgramMenuId(program.id);
-                          setProgramColorListId(null);
-                        }}
-                        disabled={saving}
-                        aria-expanded={programMenuId === program.id}
-                      >
-                        <MaterialMoreVertIcon />
-                      </button>
-                      {programMenuId === program.id ? (
-                        <div className="calendar-program-dropdown" role="menu" aria-label={`${program.name} 메뉴`}>
-                          <div className="program-dropdown-actions">
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              data-tooltip="프로그램 이름 수정"
-                              aria-label="프로그램 이름 수정"
-                              title="프로그램 이름 수정"
-                              onClick={() => openProgramRename(program)}
-                              disabled={saving}
-                            >
-                              <MaterialEditIcon />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn icon-btn-danger"
-                              data-tooltip="프로그램 삭제"
-                              aria-label="프로그램 삭제"
-                              title="프로그램 삭제"
-                              onClick={() => {
-                                cancelProgramNameEdit();
-                                setProgramMenuId(null);
-                                setProgramColorListId(null);
-                                void handleProgramDelete(program);
-                              }}
-                              disabled={saving}
-                            >
-                              <MaterialDeleteIcon />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              data-tooltip="색상 변경"
-                              aria-label="색상 변경"
-                              title="색상 변경"
-                              onClick={() => setProgramColorListId((prev) => (prev === program.id ? null : program.id))}
-                              disabled={saving}
-                            >
-                              <MaterialPaletteIcon />
-                            </button>
-                          </div>
-                          {programColorListId === program.id ? (
-                            <div className="program-color-option-list" role="group" aria-label="프로그램 색상 선택">
-                              {PROGRAM_COLOR_OPTIONS.map((option) => {
-                                const active = option.value.toLowerCase() === normalizeProgramColor(program.color);
-                                return (
-                                  <button
-                                    key={option.key}
-                                    type="button"
-                                    className={`program-color-option ${active ? "active" : ""}`}
-                                    onClick={() => {
-                                      void handleProgramColorUpdate(program, option.value);
-                                    }}
-                                    disabled={saving}
-                                  >
-                                    <span
-                                      className="program-color-option-swatch"
-                                      style={{ "--swatch-color": option.value } as CSSProperties}
-                                      aria-hidden="true"
-                                    />
-                                    <span className="program-color-option-label">{option.label}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <div className="calendar-program-panel-body">{renderProgramList()}</div>
         </aside>
       </section>
+
+      <button
+        type="button"
+        className={`calendar-program-drawer-backdrop ${programDrawerOpen ? "open" : ""}`}
+        aria-label="프로그램 리스트 닫기"
+        onClick={() => setProgramDrawerOpen(false)}
+      />
+      <aside
+        className={`calendar-program-drawer ${programDrawerOpen ? "open" : ""}`}
+        aria-hidden={!programDrawerOpen}
+      >
+        <div className="calendar-program-drawer-head">
+          <h3 className="panel-title">프로그램 리스트</h3>
+          <div className="calendar-program-drawer-head-actions">
+            <button
+              type="button"
+              className="calendar-program-drawer-icon"
+              data-tooltip="프로그램 추가"
+              aria-label="프로그램 추가"
+              title="프로그램 추가"
+              onClick={openProgramCreate}
+              disabled={saving}
+            >
+              <MaterialAddIcon />
+            </button>
+            <button
+              type="button"
+              className="calendar-program-drawer-icon"
+              data-tooltip="프로그램 리스트 닫기"
+              aria-label="프로그램 리스트 닫기"
+              title="프로그램 리스트 닫기"
+              onClick={() => setProgramDrawerOpen(false)}
+            >
+              <MaterialCloseIcon />
+            </button>
+          </div>
+        </div>
+        <div className="calendar-program-drawer-body">
+          {renderProgramList()}
+        </div>
+      </aside>
 
       {dayAgendaOpen ? (
         <div className="modal-overlay calendar-day-dialog-overlay" onClick={() => setDayAgendaOpen(false)}>

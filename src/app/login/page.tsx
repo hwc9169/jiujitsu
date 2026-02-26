@@ -241,7 +241,7 @@ export default function LoginPage() {
       <div className="auth-card">
         <div className="auth-logo-wrap" aria-hidden="true">
           <Image
-            src="/jiujittaero-icon.png"
+            src="/jiujiteiro-icon.png"
             alt="주짓때로 로고"
             width={1280}
             height={960}

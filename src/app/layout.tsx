@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { GlobalTooltip } from "@/components/global-tooltip";
+import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -44,6 +45,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <SiteFooter />
         <GlobalTooltip />
       </body>
     </html>

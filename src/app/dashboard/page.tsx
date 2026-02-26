@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import Link from "next/link";
 import { ConsoleShell } from "@/components/console-shell";
 import { apiFetch } from "@/lib/api_client";
@@ -208,11 +208,14 @@ export default function DashboardPage() {
           <p className="sales-selected-value">{loading ? "-" : formatKRW(selectedMonthSales)}</p>
         </div>
 
-        <div className="sales-line-chart-wrap">
+        <div
+          className="sales-line-chart-wrap"
+          style={{ "--sales-chart-min-width": `${chartGeometry.width}px` } as CSSProperties}
+        >
           <svg
             viewBox={`0 0 ${chartGeometry.width} ${chartGeometry.height}`}
             className="sales-line-chart"
-            style={{ width: "100%", height: `${chartGeometry.height}px` }}
+            style={{ height: `${chartGeometry.height}px` }}
             role="img"
             aria-label={`${monthLabelFromKey(selectedMonthKey)} 일별 매출 라인 차트`}
             preserveAspectRatio="none"
@@ -296,7 +299,7 @@ export default function DashboardPage() {
           <h3 className="panel-title">빠른 작업</h3>
         </div>
         <div className="quick-actions">
-          <Link href="/members" className="btn btn-secondary">
+          <Link href="/dashboard/members" className="btn btn-secondary">
             회원 목록 확인
           </Link>
           <button type="button" className="btn btn-text" disabled>
