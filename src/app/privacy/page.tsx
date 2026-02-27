@@ -33,21 +33,25 @@ export default function PrivacyPage() {
           <section id="policy-1" className="legal-section legal-section-card">
             <h2><span className="legal-index">1</span>수집하는 개인정보 항목</h2>
             <p>회사는 서비스 제공을 위해 다음과 같은 정보를 수집할 수 있습니다.</p>
-            <h3>① 회원가입 시</h3>
+            <h3>① 회원가입 및 카카오 로그인 시</h3>
             <ul className="legal-list">
-              <li>이메일</li>
-              <li>이름</li>
-              <li>휴대전화번호</li>
+              <li>[필수] 이름</li>
+              <li>[필수] 카카오계정(전화번호)</li>
+              <li>[필수] 성별</li>
+              <li>[필수] 연령대</li>
+              <li>[필수] 생일</li>
+              <li>[필수] 출생연도</li>
+              <li>[선택] 이메일</li>
             </ul>
             <h3>② 서비스 이용 과정에서</h3>
             <ul className="legal-list">
-              <li>도장 운영자가 입력하는 회원 정보(이름, 연락처, 회원권 정보 등)</li>
+              <li>[필수] 도장 운영자가 입력하는 회원 정보(이름, 연락처, 회원권 정보 등)</li>
             </ul>
             <h3>③ 홈페이지 문의 기능 이용 시</h3>
             <ul className="legal-list">
-              <li>이름</li>
-              <li>연락처</li>
-              <li>문의 내용</li>
+              <li>[필수] 이름</li>
+              <li>[필수] 연락처</li>
+              <li>[필수] 문의 내용</li>
             </ul>
             <h3>④ 자동 수집 정보</h3>
             <ul className="legal-list">
@@ -56,12 +60,18 @@ export default function PrivacyPage() {
               <li>쿠키</li>
               <li>서비스 이용 기록</li>
             </ul>
+            <p>
+              필수 항목은 회원가입 및 서비스 제공을 위해 반드시 필요한 정보이며, 선택 항목은 미동의 시에도 기본 서비스 이용이
+              가능합니다.
+            </p>
           </section>
 
           <section id="policy-2" className="legal-section legal-section-card">
             <h2><span className="legal-index">2</span>개인정보의 이용 목적</h2>
             <ul className="legal-list">
               <li>서비스 제공 및 운영</li>
+              <li>회원 식별 및 카카오 로그인 연동 처리</li>
+              <li>이용자 연령대 기반 서비스 제공 및 맞춤 안내</li>
               <li>회원 관리 기능 제공</li>
               <li>홈페이지 생성 및 관리 기능 제공</li>
               <li>문자 안내 발송(만료 안내, 공지 등)</li>
